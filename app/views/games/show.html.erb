@@ -1,0 +1,17 @@
+<% content_for :title, "Game ##{@game.id}" %>
+
+<div class="max-w-3xl mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold">Game #<%= @game.id %></h1>
+    <%= link_to "← All games", games_path, class: "text-slate-500 hover:underline" %>
+  </div>
+
+  <%# Phase 2 mounts the chessboard + Stockfish analysis onto this element. %>
+  <div data-controller="chess"
+       data-chess-game-id-value="<%= @game.id %>"
+       data-chess-fen-value="<%= @game.fen %>"
+       data-chess-move-url-value="<%= move_game_path(@game) %>"
+       data-chess-finish-url-value="<%= finish_game_path(@game) %>">
+    <p class="text-slate-500">Loading board…</p>
+  </div>
+</div>

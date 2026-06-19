@@ -1,0 +1,25 @@
+<% content_for :title, "My Games" %>
+
+<div class="max-w-2xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">My Games</h1>
+    <%= button_to "New game", games_path, method: :post,
+          class: "bg-slate-900 text-white rounded px-4 py-2 hover:bg-slate-700" %>
+  </div>
+
+  <% if @games.empty? %>
+    <p class="text-slate-500">No games yet. Start one and play the computer.</p>
+  <% else %>
+    <ul class="divide-y divide-slate-200 bg-white rounded shadow-sm">
+      <% @games.each do |game| %>
+        <li class="px-4 py-3 flex items-center justify-between">
+          <%= link_to "Game ##{game.id}", game, class: "text-slate-900 hover:underline" %>
+          <span class="text-sm text-slate-500">
+            <%= game.finished? ? "#{game.status}#{" · #{game.result}" if game.result}" : "in progress" %>
+            · <%= game.created_at.strftime("%b %-d, %Y") %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</div>

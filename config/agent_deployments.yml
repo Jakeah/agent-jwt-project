@@ -1,0 +1,26 @@
+# Agentforce deployment registry — the single source of truth for SOMA/MOMA.
+#
+# Each entry is one Salesforce MIAW Embedded Service deployment that this app can hand a
+# verified identity to. Adding an agent (SOMA) or an org (MOMA) is a new row here — no code
+# change. The JWT minter reads `audience` + `key_id` from the matching entry; the embed
+# snippet reads the org/deployment/url fields.
+#
+# Values for the `chess-agent` org are filled in during Phase 4 (after the MIAW deployment +
+# User Verification config exist). Until then they are placeholders.
+#
+# `default_deployment` selects which entry the app uses when no ?deployment= param is given.
+
+default_deployment: chess_support
+
+deployments:
+  chess_support:
+    label: "Chess Support (chess-agent org)"
+    org_id: "TODO_18CHAR_ORG_ID"            # Salesforce org id (Phase 4)
+    deployment_name: "TODO_ESW_DEV_NAME"    # Embedded Service deployment dev name (Phase 4)
+    site_url: "TODO_ESW_SITE_URL"           # ESW bootstrap base URL (Phase 4)
+    scrt2_url: "TODO_SCRT2_URL"             # SCRT2 messaging URL (Phase 4)
+    # --- User Verification JWT claims ---
+    issuer: "https://chess-agent-jwt-95c105a581a5.herokuapp.com"   # JWT `iss` — this app
+    audience: "TODO_VERIFICATION_AUDIENCE"  # JWT `aud` — confirm exact value in Setup (Phase 4)
+    key_id: "chess-identity-key-1"          # JWT header `kid` — matches the public key label in Setup
+    token_ttl_seconds: 300                  # short-lived (5 min)
