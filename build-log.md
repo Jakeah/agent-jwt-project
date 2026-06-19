@@ -150,3 +150,74 @@ verifies against the public key with correct claims + TTL; tampered token reject
 
 **Phase 3 complete.** Next: Phase 4 — Salesforce agent + MIAW deployment + User Verification
 in the `chess-agent` org.
+
+## 2026-06-19 — New requirements: chess-COACH agent + chess MCP server
+
+User wants the agent to be a **chess coach**: it should know the moves played on screen when
+the chat opens, and we should give it real chess abilities via an **MCP server**. Decisions:
+- **Full proactive coach** — greets the verified user by name, knows the moves, explains the
+  position, suggests plans, flags blunders, answers questions.
+- **Build our own chess MCP server, host on Heroku** (HTTP transport, Stockfish-backed).
+
+**Research confirmed:**
+- **Game context → chat:** `embeddedservice_bootstrap.prechatAPI.setHiddenPrechatFields({...})`,
+  called **after `onEmbeddedMessagingReady` and before the conversation begins**. Hidden field
+  keys must match parameter-mapped fields on the MIAW channel (Phase 4) → conversation
+  variables the agent reads. (Also relevant events: `onEmbeddedMessagingConversationStarted`,
+  `onEmbeddedMessagingPreChatLoaded`.)
+- **MCP in Agentforce:** Agent Script supports `mcpTool://<DeveloperName>` actions
+  (action type `mcpTool`). Agentforce connects to **remote** MCP servers over HTTPS (no local
+  stdio) — so we host one. OSS reference: `sonirico/mcp-stockfish` (real UCI Stockfish over
+  MCP). Exact Setup-side MCP registration UI to confirm live in Phase 4.
+
+## 2026-06-19 — Phase 2.5: publish game context (chess side)
+
+- `app/javascript/game_state.js`: tiny module singleton snapshot (gameId/pgn/fen/turn/
+  moveCount/lastEval/status), mirrored to `window.__chessGameState` for the non-module embed
+  snippet. `gameStateForPrechat()` flattens it to the `Chess_*` string fields MIAW prechat
+  expects.
+- `chess_controller.js` publishes the snapshot on connect + after every user/computer move +
+  on each eval. The *consumption* (setHiddenPrechatFields) lands in Phase 5 with the real
+  deployment.
+- **Verified:** system test now also asserts `window.__chessGameState` carries the live PGN +
+  game id. 12 assertions green.
+
+**Phase 2.5 (chess side) complete.** Next: Phase 4.5 — build the chess MCP server.
+
+## 2026-06-19 — Phase 4.5: chess MCP server (`chess-mcp/`)
+
+Node MCP server (separate Heroku app, version-controlled as a subfolder of the main repo).
+Streamable HTTP transport (`POST /mcp`), four Stockfish-backed coach tools: `analyze_fen`,
+`best_move`, `explain_move`, `name_opening` (+ a compact inline opening book).
+
+**Big gotcha — the `stockfish` npm package is a trap for servers.** It's an emscripten WASM
+module meant to load in-browser/in-process; driving it headless in Node fought back hard:
+- Spawned as a CLI it can't locate its `.wasm` (`locateFile` not set) and exits when piped
+  stdin closes before the async WASM finishes loading.
+- Loaded in-process the factory is double-wrapped (`factory()()`), and even then the message
+  listener never received `uciok`/`readyok` in our Node 25 runtime.
+- **Resolution:** use the **native Stockfish binary over UCI** (what real chess servers do).
+  `brew install stockfish` locally; on Heroku the **apt buildpack** reads `Aptfile` and
+  installs it to `/app/.apt/usr/games/stockfish` (set `STOCKFISH_PATH` to that). Binary path is
+  configurable via `STOCKFISH_PATH`, default `stockfish` on PATH. Each analysis spawns a
+  short-lived process — isolated, no cross-request races.
+
+**Second gotcha — Streamable HTTP is session-based.** First attempt built a fresh
+server+transport per request → "Bad Request: Server not initialized" because the client's
+`initialize` handshake state was thrown away. Fix: keep a `transports[sessionId]` map; create a
+transport only on a session-less `initialize`, reuse it (via the `mcp-session-id` header) for
+follow-up POSTs, and also handle GET (SSE) + DELETE (teardown) on `/mcp`.
+
+**Third gotcha — eval-swing sign in `explain_move`.** First pass reported a known weak move
+(1...f6) as "good" with a *negative* loss. The mover-perspective negation was applied twice.
+Fixed: `describeEval` returns White's-perspective cp; multiply by the mover's sign exactly once
+(`beforeMoverCp - afterMoverCp`, positive = value given away). Now 1...f6 → inaccuracy (+90cp),
+1...e5 → best.
+
+**Verified:** `node --test` → 5/5 green (boots the server, drives a real MCP client over
+Streamable HTTP, exercises all four tools incl. the weak-move/best-move discrimination).
+Heroku files: `Procfile`, `Aptfile`, `README.md` with deploy steps. Org-side MCP registration
+happens in Phase 4.
+
+**Phase 4.5 complete.** Next: Phase 4 — Salesforce org wiring (agent + MIAW + verification +
+MCP registration), where the coach instructions and prechat field mapping come together.
