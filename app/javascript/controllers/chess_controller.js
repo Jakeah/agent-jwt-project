@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { Chess } from "chess.js";
 import { Engine } from "engine";
+import { updateGameState } from "game_state";
 
 // Renders an interactive chess board, plays the user (White) against Stockfish (Black),
 // shows a live eval bar + best-move hint, and persists each move to the Rails game.
@@ -28,6 +29,7 @@ export default class extends Controller {
     this.legalTargets = [];
     this.thinking = false;
     this.#render();
+    this.#publishState();
     this.#analyze();
   }
 
@@ -111,6 +113,20 @@ export default class extends Controller {
 
   #persist() {
     this.#patch(this.moveUrlValue, { fen: this.chess.fen(), pgn: this.chess.pgn() });
+    this.#publishState();
+  }
+
+  // Mirror the live position into the shared snapshot the chat widget reads on open.
+  #publishState(extra = {}) {
+    updateGameState({
+      gameId: this.gameIdValue,
+      pgn: this.chess.pgn(),
+      fen: this.chess.fen(),
+      turn: this.chess.turn(),
+      moveCount: this.chess.moveNumber() - (this.chess.turn() === "w" ? 1 : 0),
+      status: this.chess.isGameOver() ? "over" : "active",
+      ...extra,
+    });
   }
 
   #finish(status, result) {
@@ -199,6 +215,10 @@ export default class extends Controller {
     fill.style.height = `${50 + (clamped / 1000) * 50}%`;
     text.textContent = label;
     if (best && ev.bestMoveUci) best.textContent = `Best: ${ev.bestMoveUci}`;
+
+    // Carry the latest eval (White's perspective) into the shared snapshot so the coach can
+    // reference it without re-running the engine.
+    this.#publishState({ lastEval: { scoreCp: whiteCp, mate: ev.mate ?? null } });
   }
 
   #setStatus(msg) {

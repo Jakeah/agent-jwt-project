@@ -30,6 +30,13 @@ class ChessGameTest < ApplicationSystemTestCase
     game = @user.games.last
     assert_predicate game.pgn.to_s, :present?, "a move should have persisted"
     assert game.pgn.to_s.include?("e4"), "PGN should record the user's move (was #{game.pgn.inspect})"
+
+    # The shared game-state snapshot (read by the chat widget on open) is populated with the
+    # live position — this is what seeds the coach agent's prechat context.
+    state = page.evaluate_script("window.__chessGameState")
+    assert state, "window.__chessGameState should be published"
+    assert_includes state["pgn"].to_s, "e4", "snapshot PGN should include the played move"
+    assert_equal game.id, state["gameId"], "snapshot should carry the game id"
   end
 
   private
