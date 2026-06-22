@@ -341,3 +341,39 @@ undocumented):
   - Off-topic ("weather in Paris?") → cleanly redirected to chess (guardrail works).
 - The name-greeting + game-context paths (ContactId / Chess_* vars) activate in the real MIAW
   embed (preview has no MessagingSession), validated in Phase 5/E2E.
+- **Chess Coach PUBLISHED + ACTIVATED** in chess-agent. Committed (`c93c52b`).
+
+## 2026-06-22 — PAUSED here. Pick up at: MIAW deployment + User Verification
+
+State of the world:
+- ✅ Rails chess app (Devise, Stockfish, games) — local, tested. NOT yet on Heroku.
+- ✅ RS256 identity-token endpoint + deployment registry (`config/agent_deployments.yml`).
+  Public key in `config/keys/identity_jwt.public.pem` + in
+  `docs/agentforce-user-verification-guide.md`. Private key gitignored / Heroku config var.
+- ✅ chess-mcp deployed: **chess-mcp-coach** (https://chess-mcp-coach-f6ee6f3510f9.herokuapp.com),
+  registered in org as NamedCredential/ExternalCredential `ChessMCP`. MCP-as-agent-action
+  binding deferred (Beta wall).
+- ✅ Chess Coach agent published + active in **chess-agent**. Einstein Agent User
+  `chesscoach.agent@chess-agent.demo` + `AgentforceServiceAgentUser` permset.
+- ✅ Heroku apps: **chess-agent-jwt** (Rails, not deployed yet) + **chess-mcp-coach** (live).
+
+**NEXT (Phase 4 remainder — mostly Setup UI, user chose to do later):**
+1. MIAW channel + **Embedded Service deployment**; attach the **Chess Coach** agent.
+2. **Allowed domains:** `http://localhost:3000`, `https://chess-agent-jwt-95c105a581a5.herokuapp.com`.
+3. **User Verification:** register the RS256 **public key** (in the guide doc / public.pem,
+   `kid: chess-identity-key-1`). ⚠️ Confirm in Setup: exact required JWT claims + the field
+   that maps `sub` (the user's email) → **Contact**. Update `IdentityToken` service / registry
+   `audience` to whatever Setup expects.
+4. **Parameter-mapped prechat fields** on the channel for the conversation variables:
+   `Chess_PGN, Chess_FEN, Chess_Turn, Chess_Move_Count, Chess_Status` (the agent already
+   declares these mutable vars; prechat must populate them).
+5. Capture the deployment **bootstrap snippet** (org id, ESW deployment name, ESW URL, SCRT2
+   URL) → fill into `config/agent_deployments.yml` (the `chess_support` entry's TODO fields).
+6. Seed a test **Contact** whose email matches a Rails user (for the verified-greeting path).
+
+**THEN Phase 5:** embed the bootstrap snippet in the Rails authenticated layout +
+`agentforce_controller.js`: `setIdentityToken` on `onEmbeddedMessagingReady`,
+`setHiddenPrechatFields` with the game state, re-mint on expiry, `clearSession` on logout.
+**Phase 6:** deploy Rails to chess-agent-jwt. **Phase 7:** architecture doc + demo script.
+**To revisit MCP:** uncomment the 4 mcpTool actions in `Chess_Coach.agent` once the
+McpServerToolDefinition target-ID binding resolves; re-validate + re-publish.
