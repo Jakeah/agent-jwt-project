@@ -1,0 +1,23 @@
+{
+    "records": [
+        {
+            "attributes": {
+                "type": "User",
+                "referenceId": "ChessCoachAgentUser"
+            },
+            "ProfileId": "00eg8000003FXscAAG",
+            "Username": "chesscoach.agent@chess-agent.demo",
+            "Alias": "chsagnt",
+            "CommunityNickname": "ChessCoachAgent",
+            "Email": "noreply@example.com",
+            "FirstName": "Chess Coach",
+            "LastName": "Agent",
+            "IsActive": true,
+            "ForecastEnabled": false,
+            "EmailEncodingKey": "UTF-8",
+            "LanguageLocaleKey": "en_US",
+            "LocaleSidKey": "en_US",
+            "TimeZoneSidKey": "America/Los_Angeles"
+        }
+    ]
+}

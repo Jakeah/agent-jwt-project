@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>A Stockfish-backed chess coach that knows the player&apos;s current game and coaches proactively.</description>
+    <localTopicLinks>
+        <genAiPluginName>ambiguous_question_16jg8000000VGTZ</genAiPluginName>
+    </localTopicLinks>
+    <localTopicLinks>
+        <genAiPluginName>coach_16jg8000000VGTZ</genAiPluginName>
+    </localTopicLinks>
+    <localTopicLinks>
+        <genAiPluginName>off_topic_16jg8000000VGTZ</genAiPluginName>
+    </localTopicLinks>
+    <localTopics>
+        <fullName>ambiguous_question_16jg8000000VGTZ</fullName>
+        <canEscalate>false</canEscalate>
+        <description>Ask for clarification when the user&apos;s chess request is unclear</description>
+        <developerName>ambiguous_question_16jg8000000VGTZ</developerName>
+        <genAiPluginInstructions>
+            <description>You are a friendly, encouraging chess coach embedded in a chess web app. The player you are helping is already signed in and identity-verified, and you can see the moves they have played in the current game. Coach proactively but concisely. Ground every concrete claim about the position (best move, whether a move was a blunder, evaluation) in the chess analysis tools — never invent engine evaluations. Explain ideas in plain, motivating language a club player understands.</description>
+            <developerName>instruction0_179g8000000urwz</developerName>
+            <language>en_US</language>
+            <masterLabel>instruction0_179g8000000urwz</masterLabel>
+            <sortOrder>1</sortOrder>
+        </genAiPluginInstructions>
+        <language>en_US</language>
+        <localDeveloperName>ambiguous_question</localDeveloperName>
+        <masterLabel>Ambiguous Question</masterLabel>
+        <pluginType>Topic</pluginType>
+    </localTopics>
+    <localTopics>
+        <fullName>off_topic_16jg8000000VGTZ</fullName>
+        <canEscalate>false</canEscalate>
+        <description>Redirect conversation back to chess when the user goes off-topic</description>
+        <developerName>off_topic_16jg8000000VGTZ</developerName>
+        <genAiPluginInstructions>
+            <description>You are a friendly, encouraging chess coach embedded in a chess web app. The player you are helping is already signed in and identity-verified, and you can see the moves they have played in the current game. Coach proactively but concisely. Ground every concrete claim about the position (best move, whether a move was a blunder, evaluation) in the chess analysis tools — never invent engine evaluations. Explain ideas in plain, motivating language a club player understands.</description>
+            <developerName>instruction0_179g8000000urx0</developerName>
+            <language>en_US</language>
+            <masterLabel>instruction0_179g8000000urx0</masterLabel>
+            <sortOrder>1</sortOrder>
+        </genAiPluginInstructions>
+        <language>en_US</language>
+        <localDeveloperName>off_topic</localDeveloperName>
+        <masterLabel>Off Topic</masterLabel>
+        <pluginType>Topic</pluginType>
+    </localTopics>
+    <localTopics>
+        <fullName>coach_16jg8000000VGTZ</fullName>
+        <canEscalate>false</canEscalate>
+        <description>Coach the verified player about their current game and answer chess questions.</description>
+        <developerName>coach_16jg8000000VGTZ</developerName>
+        <genAiPluginInstructions>
+            <description>You are a friendly, encouraging chess coach embedded in a chess web app. The player you are helping is already signed in and identity-verified, and you can see the moves they have played in the current game. Coach proactively but concisely. Ground every concrete claim about the position (best move, whether a move was a blunder, evaluation) in the chess analysis tools — never invent engine evaluations. Explain ideas in plain, motivating language a club player understands.</description>
+            <developerName>instruction0_179g8000000urx1</developerName>
+            <language>en_US</language>
+            <masterLabel>instruction0_179g8000000urx1</masterLabel>
+            <sortOrder>1</sortOrder>
+        </genAiPluginInstructions>
+        <language>en_US</language>
+        <localActionLinks>
+            <functionName>get_player_name_179g8000000urx1</functionName>
+        </localActionLinks>
+        <localActions>
+            <fullName>get_player_name_179g8000000urx1</fullName>
+            <description>Look up the verified player&apos;s first name from their Contact.</description>
+            <developerName>get_player_name_179g8000000urx1</developerName>
+            <invocationTarget>ChessCoachGetPlayerName</invocationTarget>
+            <invocationTargetType>apex</invocationTargetType>
+            <isConfirmationRequired>false</isConfirmationRequired>
+            <isIncludeInProgressIndicator>false</isIncludeInProgressIndicator>
+            <localDeveloperName>get_player_name</localDeveloperName>
+            <masterLabel>Get Player Name</masterLabel>
+        </localActions>
+        <localDeveloperName>coach</localDeveloperName>
+        <masterLabel>Chess Coach</masterLabel>
+        <pluginType>Topic</pluginType>
+    </localTopics>
+    <masterLabel>Chess Coach</masterLabel>
+    <plannerType>Atlas__ConcurrentMultiAgentOrchestration</plannerType>
+</GenAiPlannerBundle>

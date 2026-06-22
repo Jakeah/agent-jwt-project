@@ -221,3 +221,123 @@ happens in Phase 4.
 
 **Phase 4.5 complete.** Next: Phase 4 — Salesforce org wiring (agent + MIAW + verification +
 MCP registration), where the coach instructions and prechat field mapping come together.
+
+## 2026-06-19 — Phase 4 (in progress): coach Agent Spec + MCP deployed to Heroku
+
+- **Agent Spec written + approved:** `salesforce/specs/ChessCoach-AgentSpec.md`. Service agent,
+  single `coach` domain subagent + standard guardrails, four `mcpTool://` actions, reads
+  prechat conversation variables (`Chess_*`), greets the verified user by name.
+- **Prereqs surfaced:** (1) no Einstein Agent User exists in `chess-agent` (service-agent
+  requirement — must create one); (2) verified-Contact-name → variable mechanism TBD in-org;
+  (3) prechat→variable field API names TBD on the MIAW channel.
+- **chess-mcp deployed to Heroku** (decision: MCP first, then build agent against real tools):
+  - App **`chess-mcp-coach`** → https://chess-mcp-coach-f6ee6f3510f9.herokuapp.com
+  - Buildpacks: `heroku-community/apt` (index 1, reads Aptfile → installs Stockfish 16 to
+    `/app/.apt/usr/games/stockfish`) + `heroku/nodejs` (index 2).
+    `STOCKFISH_PATH=/app/.apt/usr/games/stockfish`.
+  - Deployed via `git subtree push --prefix chess-mcp heroku-mcp main`.
+  - **Gotcha:** Heroku Node buildpack rejects an out-of-sync `package-lock.json`. The
+    native-Stockfish switch had changed package.json (dropped `stockfish`, added `zod`) without
+    regenerating the lockfile → "npm lockfile is not in sync". Fixed by `npm install` + commit.
+  - **Verified live:** `/healthz` ok; Stockfish binary present on dyno; a real MCP client over
+    the public HTTPS endpoint lists all four tools and `analyze_fen` returns engine analysis
+    (+0.40, best e4, full PV). This is the endpoint Agentforce registers against.
+
+## 2026-06-19 — Phase 4: coach agent authored; Einstein user; MCP registration model found
+
+- **Einstein Agent User created:** `chesscoach.agent@chess-agent.demo` (id `005g8000004rM6XAAU`)
+  via `sf data import tree` (org has 1002 Einstein Agent licenses). Recorded in the spec as
+  `default_agent_user`.
+- **Coach agent authored:** `aiAuthoringBundles/Chess_Coach/Chess_Coach.agent`. Service agent,
+  `agent_type: AgentforceServiceAgent`. Single `coach` start_agent + `off_topic` /
+  `ambiguous_question` guardrails. Dropped the boilerplate escalation subagent (needs an
+  Omni-Channel Flow we don't have; a coach doesn't need human handoff). `before_reasoning`
+  looks up the player's name from the Contact; instructions greet by name, surface the live
+  game (Chess_* vars), and route chess analysis to the MCP tools.
+- **`get_player_name` Apex** (`ChessCoachGetPlayerName`) — invocable, queries Contact.FirstName
+  from the verified ContactId. Deployed successfully.
+- **Salesforce DX MCP Server** (`@salesforce/mcp`) added at **user scope** (`salesforce-dx`,
+  follows DEFAULT_TARGET_ORG) — dev tooling for me against the org, available all projects.
+  NOTE: distinct from registering *our* chess-mcp as an agent action.
+- **KEY FINDING — MCP registration is deployable metadata, not just a Setup UI click.** The
+  org exposes `McpServerDefinition` + child `McpServerToolDefinition` /
+  `McpServerToolApiDefinition` / `McpServerPromptDefinition` / `McpServerAccess`. Tool defs
+  carry MCP annotations (ReadOnly/Destructive/Idempotent/OpenWorld). Endpoint+auth likely via
+  a NamedCredential referenced from the McpServerDefinition XML. This means chess-mcp can be
+  registered via metadata we author + deploy (and version-control), not hand-clicking.
+- **BLOCKER (expected):** the agent's four `mcpTool://` action targets won't resolve (and the
+  bundle won't fully validate) until the McpServerDefinition is registered and the tool dev
+  names exist. `validate` currently errors only on the 4 MCP actions being "not defined" —
+  the rest of the agent (structure, vars, guardrails, get_player_name) is syntactically clean.
+
+### MCP registration — schema discovery findings (metadata-authoring path)
+
+Reverse-engineered the `McpServerDefinition` schema by deploy-and-read against the org (Beta,
+undocumented):
+- Deploys as `mcpServerDefinitions/<Name>.mcpServerDefinition-meta.xml`. **API name must be
+  alphanumeric only, 2–40 chars** (no underscores — `Chess_MCP` rejected, `ChessMCP` ok).
+- **The base metadata XML is just `<masterLabel>` + `<description>`.** A minimal stub deploys
+  successfully (record id `1g1g800000002ZhAAI`, visible via Tooling API; NOT via standard
+  SOQL). No endpoint/URL/NamedCredential/transport/tools fields in the deployable metadata.
+- Child objects exist (`McpServerToolDefinition` with MCP annotations, `McpServerToolApiDefinition`
+  with ApiSource/ApiIdentifier/Operation, `McpServerAccess`) but are populated by **tool sync**,
+  not authored by hand.
+- **Conclusion:** the endpoint URL + auth (NamedCredential) + tool discovery/sync is a
+  **Setup-UI registration / Connect-API runtime step**, not deployable-metadata fields in this
+  Beta build. Pure-metadata authoring stubs the server but can't wire it to the live endpoint.
+  → Decision point surfaced to user: register via Setup UI (then capture synced tool dev names
+  to wire the agent's `mcpTool://` targets) vs. ship coach-without-MCP first.
+
+### MCP registered via Setup UI + agent validates clean
+
+- **User registered the MCP server in Setup** (MCP Servers page, no-auth). It stored the
+  connection as a **NamedCredential `ChessMCP`** (SecuredEndpoint, Url =
+  `https://chess-mcp-coach-f6ee6f3510f9.herokuapp.com/mcp`) + **ExternalCredential `ChessMCP`**
+  (auth protocol Custom → `NoAuthentication`, param group `MCPAuthentication`). No queryable
+  `McpServerDefinition`/tool records surfaced via SOQL — the connection lives in the
+  NamedCred/ExternalCred pair.
+- **Agent Script structure gotcha (important):** `target`/`inputs`/`outputs` are NOT valid
+  inline in `reasoning.actions` — that block only *wires* actions (`name: @actions.x` +
+  `with`/`set`/`available when`). Actions are **defined** in a separate **subagent-level
+  `actions:` block** (sibling of `reasoning:`, placed after it) with `target`/`inputs`/
+  `outputs`. Split the coach accordingly.
+- **MCP target format confirmed:** `mcpTool://ChessMCP/<toolName>` (server dev-name = the
+  NamedCredential name `ChessMCP`; tool = its MCP tool name, e.g. `analyze_fen`).
+- **`sf agent validate authoring-bundle --api-name Chess_Coach` → status 0, zero errors.**
+  The coach compiles with all four live `mcpTool://` actions + the Apex `get_player_name`.
+
+### Live-preview blocker: MCP tools displayed in UI but NOT persisted as records
+
+- `sf agent preview start --use-live-actions` (status 4) rejects the MCP actions:
+  *"The MCP action 'ChessMCP/analyze_fen' has an invalid target ID value."* Same for all four.
+  Tried `mcpTool://ChessMCP/<tool>` and `mcpTool://<tool>` — both compile but fail this deeper
+  runtime validation. The runtime wants a resolvable **tool target ID**.
+- **Root cause (confirmed via raw Tooling REST API — ground truth):**
+  `SELECT ... FROM McpServerDefinition` → **0 records**; `McpServerToolDefinition` → **0 records**.
+  Despite the MCP Servers Setup page *displaying* the 4 tools, nothing was persisted. The
+  registration created the NamedCredential + ExternalCredential (the *connection*) but the
+  server + tool records were never saved/imported → no IDs for the agent to target.
+  - ⚠️ CLI tooling-query gotcha: `sf data query --use-tooling-api "SELECT COUNT()..."` returned
+    a phantom `1`; the raw `sf api request rest /tooling/query` returns the correct `0`. Trust
+    the REST API for these Beta entities, not the CLI SOQL wrapper.
+- **Next:** the MCP server registration needs to be *completed/saved* in Setup (or the tools
+  explicitly enabled/imported) so `McpServerToolDefinition` records exist with target IDs.
+  Then re-target the agent actions to the real IDs and re-run live preview.
+
+### Decision: ship coach WITHOUT MCP now; coach validated in live preview
+
+- Per user: comment out the 4 `mcpTool://` actions (refs + definitions kept as comments for
+  easy re-enable) so the coach ships now; revisit MCP binding later. Instructions updated to
+  coach from the LLM's own chess knowledge (honest that evals are estimates).
+- **Permissions gotcha:** first live-preview after disabling MCP failed with *"Unable to access
+  the Salesforce Agent APIs"* (error names the org admin user, but root cause is the **Einstein
+  Agent User**). Fixed: `sf org assign permset --name AgentforceServiceAgentUser
+  --on-behalf-of chesscoach.agent@chess-agent.demo`.
+- **Coach VALIDATED in live preview** (`--use-live-actions`, session started status 0):
+  - Greeting → warm welcome + invites a chess question.
+  - "1.e4 e5 2.Nf3 Nc6 3.Bb5, what's this opening + my plan?" → correctly named the **Ruy
+    López**, explained White's plan (pressure e5, 0-0/Re1/c3/d4, the ...a6 question, c6
+    exchange decision). Strong, specific coaching from the LLM alone.
+  - Off-topic ("weather in Paris?") → cleanly redirected to chess (guardrail works).
+- The name-greeting + game-context paths (ContactId / Chess_* vars) activate in the real MIAW
+  embed (preview has no MessagingSession), validated in Phase 5/E2E.
