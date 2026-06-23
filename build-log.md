@@ -765,3 +765,37 @@ down the shim:
 **Why both exist meanwhile:** the chess-mcp server already serves BOTH transports off the same
 `src/tools.js` — MCP (/mcp, for the future native binding) and REST (/api/*, for today's Apex
 shim). So flipping to native is purely a Salesforce-side rewire; the server is already ready.
+
+## 2026-06-23 — Game context: prechat fields SENT correctly but don't reach the agent variable
+
+E2E live: coach gives real engine coaching but keeps asking for the FEN — it doesn't see the
+on-screen game. Traced the whole path; the break is the MIAW-prechat-field → agent-variable bind.
+
+### What's PROVEN working (ruled out)
+- **Client sends correct, current data:** console-hooked `setHiddenPrechatFields` — fires on every
+  move with a real live `Chess_FEN` (e.g. r1bqkbnr/pp1p1ppp/2n1p3/...) + Turn/Move_Count/Status.
+- **Re-seed timing fixed:** game_state dispatches `chess:state-changed`; the agentforce controller
+  re-seeds on every move (was only seeding once at page-load = starting position). Deployed v9.
+- **Deployment hidden-prechat fields fixed:** all 5 Chess_* were in "Available" only — moved to
+  "Selected" + republished. Confirmed in the retrieved EmbeddedServiceConfig (5 formFields,
+  isHidden=true).
+
+### The unresolved break: prechat field → conversation variable
+- Agent's Chess_* vars were `mutable string = ""` with NO source → never populated; stayed default.
+- Tried `linked` + `source: @context.Chess_FEN` → **compiler rejects**: "source must reference
+  @MessagingSession / @MessagingEndUser / @VoiceCall."
+- Tried `source: @MessagingSession.Chess_FEN` → **validates but FAILS PUBLISH**: "you don't have
+  access to field MessagingSession.Chess_PGN." And `describe MessagingSession` confirms **no
+  Chess_* custom fields exist** (43 fields, 0 custom) — the channel Custom Parameters do NOT
+  materialize as MessagingSession fields.
+- No queryable object for the params (ConversationChannelParameter / ConversationVariable / etc.
+  all INVALID_TYPE). The setup doc (service.miaw_custom_parameters.htm etc.) won't render via tooling.
+- **Conclusion:** the supported mechanism to bind a MIAW hidden prechat field / channel custom
+  parameter to an Agentforce conversation variable is unknown and not discoverable from here.
+  Reverted the vars to `mutable` so the agent PUBLISHES + ACTIVATES (engine actions unaffected).
+- **Decision:** ask Slackbot (internal docs) for the authoritative binding. Engine coaching works
+  fully meanwhile; the player just supplies the FEN in chat.
+
+### Minor known bug (fix later)
+- trimPgn is capturing PGN *headers*: Chess_PGN came through as `[SetUp "1"]\n[FEN ...]\n3. f4 e6`
+  instead of clean SAN. The chess.js .pgn() output includes headers; strip them in game_state.

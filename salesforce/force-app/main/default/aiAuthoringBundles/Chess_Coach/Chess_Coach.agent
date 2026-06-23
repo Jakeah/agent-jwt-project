@@ -27,6 +27,13 @@ variables:
         description: "MessagingSession EndUserLanguage"
 
     # --- On-screen game context (set from MIAW hidden prechat fields → conversation variables) ---
+    # OPEN ITEM: how a MIAW hidden prechat field / channel custom parameter binds to an Agentforce
+    # conversation variable is unresolved. `linked` with source @MessagingSession.Chess_* validates
+    # but FAILS PUBLISH ("no access to field MessagingSession.Chess_PGN" — no such field exists; the
+    # custom parameters don't materialize as MessagingSession fields). `@context.*` is rejected by
+    # the compiler (source must be @MessagingSession/@MessagingEndUser/@VoiceCall). Kept `mutable`
+    # so the agent publishes; awaiting the authoritative binding mechanism (Slackbot/internal docs).
+    # Meanwhile game context is conveyed in-conversation (FEN given/asked in chat).
     Chess_PGN: mutable string = ""
         description: "Moves played so far in the current game, in PGN."
     Chess_FEN: mutable string = ""
