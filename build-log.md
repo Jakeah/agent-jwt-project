@@ -640,3 +640,35 @@ browser" item, NOT an app bug.
 **To resume:** open `service.miaw_token_based_user_verification_setup.htm` in a browser and find
 the step that ties the keyset to the channel (or the external-site activation step). The success
 check is one query: MessagingEndUser.ContactId populated + platformKey contains `AUTH/...`.
+
+## 2026-06-23 — PAUSED: waiting on PM to enable org-level User Verification preference
+
+Root cause narrowed (with Slackbot/internal help). The UNAUTH/Guest binding is almost certainly
+a **missing org-level enablement**, not an app or per-channel config issue.
+
+- **Suspected toggle:** `EmbeddedMessagingUserVerification` (org preference). Not reachable via
+  my tooling — `OrgPreferenceSettings` isn't a queryable SObject, and `Settings:LiveMessage`
+  metadata only exposes `enableLiveMessage=true` (no verification flag). So it's a Setup/support-
+  gated org pref.
+- **Slackbot confirmed:** Enhanced Chat **V2 is NOT required** for token-based User Verification
+  on an external site — staying on **V1** (no deployment migration, no snippet/URL churn).
+- **Action in flight:** user has a request out to the **PM to enable** the org preference for
+  org `00Dg8000008l1Ac` (MIAW User Verification is Beta).
+
+**When it's enabled, resume here (everything else is already in place & proven):**
+1. Re-run the success check — no app changes expected:
+   `SELECT Name, ContactId, MessagingPlatformKey FROM MessagingEndUser ORDER BY CreatedDate DESC LIMIT 3`
+   (export SF_AUTOUPDATE_DISABLE=true for clean JSON). SUCCESS = ContactId populated +
+   MessagingPlatformKey contains `AUTH/...` (not `UNAUTH`). Also check
+   `MessagingChannel.Chess_Coach_Web.IsAuthenticated` flipped to true.
+2. Clean test: incognito → app → sign in player@example.com / ChessCoach2026! → hard refresh →
+   chat button appears → send a message. Coach should greet "Jordan" + reference the game.
+3. If still UNAUTH after the pref is on: re-confirm keyset issuer byte-match + that the x5c key
+   is the active one; then back to the PM/support.
+
+**Proven-working inventory (unchanged):** Heroku app live; JWT mint + signature + claims correct;
+x5c JWK uploaded; keyset `Chess_Identity_Keyset` (issuer = heroku app URL, no trailing slash);
+widget verification-aware (button gates on token). Only the org pref remains.
+
+**Remaining project work after verification confirms:** Phase 7 docs — `docs/architecture-and-build.md`
+(Mermaid auth-flow + SOMA/MOMA + gotchas incl. the x5c lesson) + separate `docs/demo-script.md`.
