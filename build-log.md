@@ -799,3 +799,34 @@ on-screen game. Traced the whole path; the break is the MIAW-prechat-field → a
 ### Minor known bug (fix later)
 - trimPgn is capturing PGN *headers*: Chess_PGN came through as `[SetUp "1"]\n[FEN ...]\n3. f4 e6`
   instead of clean SAN. The chess.js .pgn() output includes headers; strip them in game_state.
+
+## 2026-06-23 — RESOLVED (mechanism): prechat→agent is a 5-layer pipeline, not a direct bind
+
+Slackbot (internal docs) gave the authoritative answer. There is **no direct** prechat-field →
+agent-variable binding. The supported path writes prechat values into **MessagingSession custom
+fields** via an Omni-Flow, and the agent reads `@MessagingSession.<field>__c`. Full guide written:
+**docs/miaw-prechat-to-agent-guide.md** (referenced from CLAUDE.md).
+
+Pipeline: client setHiddenPrechatFields → [1] Messaging Settings Custom Parameter → [2] Parameter
+Mapping (param→Omni-Flow input var) → [3] **Omni-Flow Update Records writes flow var →
+MessagingSession.X__c** (the almost-always-missing step; Splunk tell: "Get Flow Input Parameters
+for Channel. Returning empty map.") → [4] Agent Context → Messaging Session → Edit Included Fields
+→ select X__c → [5] agent reads @MessagingSession.X__c.
+
+Why our attempts failed, now explained: `@MessagingSession.Chess_FEN` was the RIGHT source syntax
+— it failed publish only because **the custom field didn't exist** (we never created MessagingSession
+custom fields, and there was no Omni-Flow writing to them; the channel routes directly to the agent,
+RoutingType=None). `@context.*` is simply not a thing for this.
+
+Prereqs (no Beta flag): Einstein GenAI on; field in BOTH Custom Parameters AND deployment Hidden
+Pre-Chat Fields; agent user has Agentforce Service Agent Object Access + Configuration perm sets +
+FLS on the new fields; MessagingSession custom fields created.
+
+### NEXT (build the pipeline — checklist in the guide)
+1. Create MessagingSession custom fields Chess_FEN__c / Chess_PGN__c / Chess_Turn__c /
+   Chess_Move_Count__c / Chess_Status__c.
+2. Build the Omni-Channel routing Flow: Parameter Mappings + Update Records → MessagingSession.*__c.
+   (This is the main new build — channel currently has no routing flow.)
+3. Agent Context: include the 5 fields.
+4. .agent: Chess_* → linked, source @MessagingSession.Chess_*__c. Publish + activate.
+5. FLS read on the 5 fields → Chess_Coach_Actions perm set. E2E test.

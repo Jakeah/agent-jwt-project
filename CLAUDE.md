@@ -17,6 +17,10 @@ and widget embed are config-driven via `config/agent_deployments.yml`.
 - **`docs/agentforce-user-verification-guide.md`** — durable, findable-by-name reference for
   the JWT claim set + Salesforce Setup steps. Edit in place when a lesson is superseded; keep
   a `Last verified:` date.
+- **`docs/miaw-prechat-to-agent-guide.md`** — how app data (the chess FEN/PGN) reaches the agent
+  via MIAW hidden prechat fields. The 5-layer pipeline (Custom Parameter → Parameter Mapping →
+  Omni-Flow Update Records → MessagingSession custom field → agent `@MessagingSession.X__c`), and
+  why the direct `source: @context.*`/prechat binding does NOT work.
 
 ## Key facts
 
