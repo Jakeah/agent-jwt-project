@@ -917,3 +917,79 @@ found via routing records, NOT guessing:
   config to assign an **Agentforce Service Agent** (BotDefinition.Type=ExternalCopilot)? Which
   id param + routingType value? Our attempts (Bot/botId, Copilot/copilotId) both produced
   PendingServiceRouting.RoutingType=QueueBased and the session sat in the fallback queue.
+
+## 2026-06-23 — Routing FIXED (stock flow pattern) + the silent empty-parameter-mapping gotcha
+
+### Routing solved by cloning the stock Agentforce flow
+My hand-authored routeWork (routingType Bot, then Copilot) always fell through to QueueBased — WRONG.
+The org ships a stock Omni flow **"Route Conversations to Agentforce Service Agents"**
+(`AiCopilot__LanguageChat`) whose structure is exactly right: Start → Update Records (writes a MS
+field) → **Route Work** → End. Its Route Work uses **Route To = "Agentforce Service Agent"** (a
+dedicated dropdown picking the agent directly) — NOT routingType Bot/Copilot. That stock flow's
+internals aren't retrievable/queryable (managed `AiCopilot__` namespace), so we couldn't copy its
+routeWork params into metadata. Solution: **"Save As New Flow"** in Flow Builder to clone it →
+`Chess_Coach_Routing_v2`, then added our 5 Chess_*__c field-writes to its Update Records + 5 Text
+input vars. Channel now: `sessionHandlerType=Flow`, `sessionHandlerFlow=Chess_Coach_Routing_v2`.
+Result: new session **Status=Active, Owner=Automated Process** = correctly agent-routed (vs. the
+broken attempts: Waiting / fallback queue). Lesson: **clone the stock ASA routing flow; don't hand-
+author the Route Work element.**
+
+### GOTCHA — MessagingSession custom fields invisible without FLS (looked like they didn't deploy)
+The 5 Chess_*__c fields deployed fine (CustomField records exist, redeploy says created:False) but
+`sf sobject describe MessagingSession` showed **0 Chess fields**, and they didn't appear in the Flow
+Builder field picker. Cause: **field-level security** — the fields were invisible to the running/
+admin user because only the *agent* user had FLS (via Chess_Coach_Actions). Fix: assign
+Chess_Coach_Actions to the admin user too (`sf org assign permset --name Chess_Coach_Actions`).
+Then describe + the Flow picker showed all 5. **A deployed custom field with no FLS for your user is
+invisible everywhere (describe AND Flow Builder) — looks like it never deployed.**
+
+### GOTCHA — Parameter Mappings show as "existing" in the UI but are SILENTLY UNHOOKED
+This one had no UI indication. The channel's Custom Parameters (Chess_FEN etc.) existed and the
+Parameter Mappings *appeared present* in Setup, but the retrieved MessagingChannel metadata showed
+every mapping's link was EMPTY:
+    <actionParameterMappings>
+    </actionParameterMappings>            ← blank! the param→flow-variable binding was never set
+    <externalParameterName>Chess_FEN</externalParameterName>
+    <name>Chess_FEN</name>
+So the flow's input vars arrived empty → Update Records wrote nulls → Chess_FEN__c stayed None even
+though routing + flow + fields were all correct. **The UI gave no sign the mapping was unhooked.**
+Only the metadata retrieve revealed it. Re-creating the mappings (now that the v2 flow exists to bind
+to) populated them: `<actionParameterMappings><actionParameterName>Chess_FEN</actionParameterName>...`.
+LESSON: to verify Parameter Mappings are actually bound, **retrieve the MessagingChannel metadata and
+check `<actionParameterMappings>` is non-empty** — don't trust the Setup UI's appearance. Likely the
+mappings need an ACTIVE routing flow to bind against; created before the flow existed = silently blank.
+
+## 2026-06-23 — Flow PROVEN correct via Debug; bug isolated to Parameter-Mapping→flow-input hop
+
+Flow Debug (recordId=real session, Chess_FEN=DEBUG_TEST_FEN) → Update Records wrote
+Chess_FEN__c=DEBUG_TEST_FEN, "Transaction Committed", and a follow-up query CONFIRMED the value
+persisted on the session. So the entire flow + field + FLS (editable now) + Update Records + filter
+(Id=recordId) chain WORKS when given an input value.
+
+Therefore the ONLY remaining break: at real runtime the flow's `Chess_FEN` input variable arrives
+**null** (live sessions write null; Debug with a manual value writes fine). I.e. the **Parameter
+Mapping is not delivering the hidden-prechat value into the flow input variable.**
+
+State of the mapping (metadata): non-empty but minimal —
+    <actionParameterMappings>
+        <actionParameterName>Chess_FEN</actionParameterName>
+    </actionParameterMappings>
+    <externalParameterName>Chess_FEN</externalParameterName>
+    <name>Chess_FEN</name>
+It names the target var but carries NO flow reference. Unclear if that's sufficient.
+
+Two candidates for the dead hop (need to confirm which):
+  (a) client not sending the fields on the live conversation post routing-change (earlier a console
+      hook proved setHiddenPrechatFields DID send a real FEN — but re-verify after the republish), OR
+  (b) SCRT2 not passing the custom parameter into the flow input despite the mapping.
+
+NOTE the Route Work debug showed routingType=Copilot + copilotId=Chess Coach AND queueId set, yet it
+routes correctly now (Active/Automated Process) — leave routing alone, it works.
+
+### Status: routing + flow + fields all proven working. ONE hop left (param-mapping→flow-input).
+ASK SLACKBOT: with a MIAW Custom Parameter + Parameter Mapping whose metadata shows
+`<actionParameterMappings><actionParameterName>Chess_FEN</actionParameterName></actionParameterMappings>`
+(no flow ref) and an active Omni routing flow with a matching `Chess_FEN` Text input var, the flow
+input still arrives null at runtime (proven via Debug that the flow writes correctly when given a
+value). What makes the hidden-prechat Custom Parameter actually populate the flow's input variable?
+Is a flow reference required on the mapping? Does the client need to send it a specific way?

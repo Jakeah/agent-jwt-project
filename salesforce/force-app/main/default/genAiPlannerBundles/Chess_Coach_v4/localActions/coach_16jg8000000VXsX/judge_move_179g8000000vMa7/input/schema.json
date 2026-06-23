@@ -1,0 +1,21 @@
+{
+  "required" : [ ],
+  "unevaluatedProperties" : false,
+  "properties" : {
+    "fen" : {
+      "title" : "Fen",
+      "description" : "Position BEFORE the move, in FEN",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    },
+    "move" : {
+      "title" : "Move",
+      "description" : "The move played, in SAN or UCI",
+      "lightning:type" : "lightning__textType",
+      "lightning:isPII" : false,
+      "copilotAction:isUserInput" : false
+    }
+  },
+  "lightning:type" : "lightning__objectType"
+}

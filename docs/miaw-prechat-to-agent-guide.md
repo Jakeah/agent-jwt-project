@@ -53,11 +53,37 @@ NOT a `source: @context.*` prechat binding. (`@context.*` does not exist for thi
 ## Key fact: "direct-to-agent" IS an Omni-Flow
 
 There is no routing path that bypasses Omni-Channel. The MIAW channel's Routing Type must be
-**Omni-Flow**; "direct to agent" just means a trivial flow whose only routing element is
-**Route Work → Bot = your agent**. Switching from our current `RoutingType=None` to Omni-Flow
-**preserves** the direct-to-agent behavior — the Route Work/Bot element is functionally identical
-to the old shortcut. So this is an additive change, not a re-architecture. Parameter Mappings are
-**inert until the flow exists**, then activate automatically (no reconfig).
+**Omni-Flow**; "direct to agent" just means a trivial flow whose only routing element is a
+**Route Work** that routes to the agent. Switching to Omni-Flow **preserves** direct-to-agent
+behavior. Parameter Mappings are **inert until the flow exists**, then activate.
+
+## ⚠️ Three gotchas that cost hours (read before debugging)
+
+**1. Don't hand-author the Route Work element — clone the stock flow.**
+Routing to an **Agentforce Service Agent** is NOT `routeWork` with `routingType=Bot`+`botId` or
+`Copilot`+`copilotId` — both deploy clean but silently fall through to **QueueBased** routing
+(session sits `Status=Waiting`, Owner=fallback queue, `PendingServiceRouting.RoutingType=QueueBased`;
+the agent never enters). The correct Route Work uses **Route To = "Agentforce Service Agent"** (a
+dedicated picker selecting the agent). The org ships a stock flow **"Route Conversations to
+Agentforce Service Agents"** (`AiCopilot__LanguageChat`) with this done right, but its managed
+internals aren't retrievable/queryable — so **"Save As New Flow"** in Flow Builder to clone it, then
+add your Update Records field-writes + input variables. A correctly agent-routed session shows
+`Status=Active, Owner=Automated Process`.
+
+**2. A deployed MessagingSession custom field with no FLS is INVISIBLE everywhere.**
+The `Chess_*__c` fields deployed (CustomField records exist) but `sObject describe` showed 0 of them
+and they didn't appear in the Flow Builder field picker — because FLS was granted only to the *agent*
+user. Assign the perm set (or otherwise grant FLS) to **your admin/building user too**, or the fields
+look like they never deployed. (`sf org assign permset --name <set>` for the running user.)
+
+**3. Parameter Mappings can show as "present" in the UI but be SILENTLY UNHOOKED.**
+The Custom Parameters existed and the mappings *appeared* in Setup, but the retrieved channel metadata
+showed every `<actionParameterMappings>` block **empty** — the param→flow-variable binding was blank,
+with zero UI indication. Result: the flow's input vars arrive empty → Update Records writes nulls →
+the agent field stays None even when routing, flow, and fields are all correct. **Verify by retrieving
+the MessagingChannel metadata and checking `<actionParameterMappings>` is non-empty** — do not trust
+the UI. Likely cause: mappings created *before* an active routing flow existed don't bind; recreate
+them once the flow is active.
 
 ## Build checklist for this project (chess FEN/PGN → Chess Coach)
 

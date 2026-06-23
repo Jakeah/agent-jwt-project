@@ -10,6 +10,246 @@
     <botUser>chesscoach.agent@chess-agent.demo</botUser>
     <contextVariables>
         <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>Email</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>Custom</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>Text</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>Facebook</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>Line</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>WhatsApp</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_FEN__c</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <dataType>Text</dataType>
+        <description>Current board position in FEN — pass this to the analysis tools.</description>
+        <developerName>Chess_FEN</developerName>
+        <includeInPrompt>false</includeInPrompt>
+        <label>Chess FEN</label>
+    </contextVariables>
+    <contextVariables>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>Custom</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>Facebook</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>Email</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>WhatsApp</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>Text</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>Line</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Move_Count__c</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <dataType>Text</dataType>
+        <description>How many full moves have been played.</description>
+        <developerName>Chess_Move_Count</developerName>
+        <includeInPrompt>false</includeInPrompt>
+        <label>Chess Move Count</label>
+    </contextVariables>
+    <contextVariables>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>Custom</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>Facebook</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>Line</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>Text</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>Email</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_PGN__c</fieldName>
+            <messageType>WhatsApp</messageType>
+        </contextVariableMappings>
+        <dataType>Text</dataType>
+        <description>Moves played so far in the current game, in PGN.</description>
+        <developerName>Chess_PGN</developerName>
+        <includeInPrompt>false</includeInPrompt>
+        <label>Chess PGN</label>
+    </contextVariables>
+    <contextVariables>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>Custom</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>WhatsApp</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>Text</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>Email</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>Facebook</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Status__c</fieldName>
+            <messageType>Line</messageType>
+        </contextVariableMappings>
+        <dataType>Text</dataType>
+        <description>Game status: active or over.</description>
+        <developerName>Chess_Status</developerName>
+        <includeInPrompt>false</includeInPrompt>
+        <label>Chess Status</label>
+    </contextVariables>
+    <contextVariables>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>Custom</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>Text</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>Line</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>WhatsApp</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>Facebook</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>Email</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Chess_Turn__c</fieldName>
+            <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <dataType>Text</dataType>
+        <description>Whose move it is now: White or Black.</description>
+        <developerName>Chess_Turn</developerName>
+        <includeInPrompt>false</includeInPrompt>
+        <label>Chess Turn</label>
+    </contextVariables>
+    <contextVariables>
+        <contextVariableMappings>
+            <SObjectType>MessagingEndUser</SObjectType>
+            <fieldName>MessagingEndUser.ContactId</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
             <SObjectType>MessagingEndUser</SObjectType>
             <fieldName>MessagingEndUser.ContactId</fieldName>
             <messageType>Text</messageType>
@@ -27,12 +267,7 @@
         <contextVariableMappings>
             <SObjectType>MessagingEndUser</SObjectType>
             <fieldName>MessagingEndUser.ContactId</fieldName>
-            <messageType>AppleBusinessChat</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingEndUser</SObjectType>
-            <fieldName>MessagingEndUser.ContactId</fieldName>
-            <messageType>Email</messageType>
+            <messageType>Custom</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingEndUser</SObjectType>
@@ -42,7 +277,7 @@
         <contextVariableMappings>
             <SObjectType>MessagingEndUser</SObjectType>
             <fieldName>MessagingEndUser.ContactId</fieldName>
-            <messageType>Custom</messageType>
+            <messageType>Email</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingEndUser</SObjectType>
@@ -59,7 +294,7 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.MessagingEndUserId</fieldName>
-            <messageType>Line</messageType>
+            <messageType>Email</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
@@ -69,17 +304,12 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.MessagingEndUserId</fieldName>
-            <messageType>WhatsApp</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.MessagingEndUserId</fieldName>
-            <messageType>Email</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.MessagingEndUserId</fieldName>
             <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.MessagingEndUserId</fieldName>
+            <messageType>Custom</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
@@ -94,7 +324,12 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.MessagingEndUserId</fieldName>
-            <messageType>Custom</messageType>
+            <messageType>WhatsApp</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.MessagingEndUserId</fieldName>
+            <messageType>Line</messageType>
         </contextVariableMappings>
         <dataType>Text</dataType>
         <description>MessagingEndUser Id</description>
@@ -111,12 +346,12 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.EndUserLanguage</fieldName>
-            <messageType>WhatsApp</messageType>
+            <messageType>Line</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.EndUserLanguage</fieldName>
-            <messageType>Custom</messageType>
+            <messageType>WhatsApp</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
@@ -131,7 +366,7 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.EndUserLanguage</fieldName>
-            <messageType>Line</messageType>
+            <messageType>Custom</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
@@ -153,31 +388,6 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.Id</fieldName>
-            <messageType>AppleBusinessChat</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.Id</fieldName>
-            <messageType>Line</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.Id</fieldName>
-            <messageType>EmbeddedMessaging</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.Id</fieldName>
-            <messageType>Custom</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.Id</fieldName>
-            <messageType>Text</messageType>
-        </contextVariableMappings>
-        <contextVariableMappings>
-            <SObjectType>MessagingSession</SObjectType>
-            <fieldName>MessagingSession.Id</fieldName>
             <messageType>Facebook</messageType>
         </contextVariableMappings>
         <contextVariableMappings>
@@ -188,7 +398,32 @@
         <contextVariableMappings>
             <SObjectType>MessagingSession</SObjectType>
             <fieldName>MessagingSession.Id</fieldName>
+            <messageType>Line</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Id</fieldName>
+            <messageType>AppleBusinessChat</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Id</fieldName>
+            <messageType>EmbeddedMessaging</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Id</fieldName>
             <messageType>Email</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Id</fieldName>
+            <messageType>Custom</messageType>
+        </contextVariableMappings>
+        <contextVariableMappings>
+            <SObjectType>MessagingSession</SObjectType>
+            <fieldName>MessagingSession.Id</fieldName>
+            <messageType>Text</messageType>
         </contextVariableMappings>
         <dataType>Text</dataType>
         <description>MessagingSession Id</description>
