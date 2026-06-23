@@ -549,3 +549,41 @@ Built the client side that hands verified identity + live game context to the MI
   Hardening item, not a demo blocker.
 → Next: Phase 6 (deploy Rails to chess-agent-jwt Heroku + set IDENTITY_JWT_PRIVATE_KEY config
   var) so the allowed-domain/HTTPS path can be exercised, then E2E verification.
+
+## 2026-06-22 — Phase 6: Rails deployed to Heroku (chess-agent-jwt) — LIVE & verified
+
+App live at https://chess-agent-jwt-95c105a581a5.herokuapp.com (web + worker dynos up).
+
+### Deploy config
+- Buildpack pinned **heroku/ruby** (root has chess-mcp/package.json → must not autodetect Node).
+- Config vars: RAILS_MASTER_KEY, IDENTITY_JWT_PRIVATE_KEY (multiline PEM via
+  `heroku config:set VAR="$(cat ...pem)"` — round-trips, 28 lines), DEMO_USER_PASSWORD,
+  RAILS_ENV/RACK_ENV=production. DATABASE_URL provided by heroku-postgresql:essential-0.
+- production.rb: assume_ssl + force_ssl enabled (widget/UV require HTTPS; /up exempt).
+- Procfile: web (puma) + worker (bin/jobs / solid_queue) + release (bin/release).
+
+### GOTCHA — Rails 8 solid stack vs. single Heroku DB (worker crash)
+- config/database.yml originally had 4 separate production DBs (primary + solid
+  cache/queue/cable). Collapsed all onto one `url: DATABASE_URL`. BUT db:prepare dedupes by
+  database, so it loaded only primary's schema.rb → solid_* tables never created → **worker
+  dyno crashed: "relation solid_queue_recurring_tasks does not exist".**
+- Fix: **bin/release** runs `db:prepare` then loads db/{queue,cache,cable}_schema.rb into the
+  single DB, idempotently (skips when the marker table — solid_queue_jobs / solid_cache_entries
+  / solid_cable_messages — already exists). Procfile release phase → bin/release. Worker then
+  boots clean (Supervisor + Worker + Dispatcher + Scheduler all started).
+- (One-off: loaded the 3 schemas manually on the first crashed release before bin/release
+  existed; subsequent deploys are self-healing.)
+
+### Demo user + live smoke test (the whole point)
+- db/seeds.rb seeds player@example.com (idempotent; password from DEMO_USER_PASSWORD). Matches
+  the Salesforce Contact Jordan Player → verified-greeting target. Seeded on prod (user id=1).
+- Smoke test (curl, real session): / → 302 sign_in (anon), /up → 200, **/identity_token anon →
+  302 sign_in (trust boundary holds — no token without a Devise session)**, http→https redirect
+  works. Logged in as the demo user + fetched /identity_token → **real RS256 JWT minted live.**
+- **Decoded live token — matches Setup exactly:** header {kid: chess-identity-key-1, alg:
+  RS256}; payload iss=<heroku app> (byte-matches keyset issuer), sub=player@example.com
+  (matches Contact), aud=<org My Domain>, exp-iat=300. iss+kid are the trust anchor → should
+  verify against the registered keyset.
+→ Phase 6 DONE. NEXT: E2E (sign in on live URL → open chat → confirm session trace shows
+  VERIFIED + bound to Jordan Player's Contact + game context reached the agent; contrast anon)
+  then Phase 7 docs. ⚠️ aud is the one value to confirm empirically in the E2E session trace.
