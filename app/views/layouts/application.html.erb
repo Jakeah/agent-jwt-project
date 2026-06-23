@@ -23,15 +23,32 @@
     <%= javascript_importmap_tags %>
   </head>
 
-  <body class="bg-slate-50 text-slate-900 min-h-screen">
+  <%# For signed-in users, the whole body is the Agentforce controller's scope: it injects the
+      MIAW bootstrap, verifies the user on ready, seeds live game context as hidden prechat
+      fields, and (because the sign-out button lives inside this scope) clears the verified
+      session on sign-out. Config comes from the deployment registry — SOMA/MOMA stays a config
+      change. Gating on user_signed_in? means /identity_token always has a Devise session. %>
+  <% if user_signed_in? %><% deployment = current_agent_deployment %><% end %>
+  <body class="bg-slate-50 text-slate-900 min-h-screen"
+        <% if user_signed_in? %>
+        data-controller="agentforce"
+        data-agentforce-org-id-value="<%= deployment.org_id %>"
+        data-agentforce-deployment-name-value="<%= deployment.deployment_name %>"
+        data-agentforce-site-url-value="<%= deployment.site_url %>"
+        data-agentforce-scrt2-url-value="<%= deployment.scrt2_url %>"
+        data-agentforce-script-url-value="<%= "#{deployment.site_url}/assets/js/bootstrap.min.js" %>"
+        data-agentforce-deployment-value="<%= deployment.name %>"
+        <% end %>>
     <nav class="bg-slate-900 text-white">
       <div class="container mx-auto px-5 py-3 flex items-center justify-between">
         <%= link_to "♞ Chess + Agentforce", root_path, class: "font-semibold text-lg" %>
         <div class="text-sm">
           <% if user_signed_in? %>
             <span class="text-slate-300 mr-3"><%= current_user.email %></span>
+            <%# End the verified chat session before the Devise session is destroyed. %>
             <%= button_to "Sign out", destroy_user_session_path, method: :delete,
-                  class: "underline hover:text-slate-300" %>
+                  class: "underline hover:text-slate-300",
+                  form: { data: { action: "submit->agentforce#endSession" } } %>
           <% else %>
             <%= link_to "Sign in", new_user_session_path, class: "underline hover:text-slate-300" %>
           <% end %>

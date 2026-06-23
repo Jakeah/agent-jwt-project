@@ -26,12 +26,32 @@ export function getGameState() {
   return { ...state };
 }
 
+// MIAW custom parameters are capped at 255 chars (Phase 4 gotcha). PGN of a long game blows
+// past that, so keep the OPENING — the head of the PGN — which is what lets the coach name the
+// opening and reason about the plan. We drop whole trailing moves (never a partial token) and
+// append an ellipsis so the agent knows the tail was truncated. FEN (always short) remains the
+// position-of-record for any concrete analysis, so trimming the narration costs nothing.
+const PGN_MAX = 255;
+
+export function trimPgn(pgn, max = PGN_MAX) {
+  if (!pgn || pgn.length <= max) return pgn || "";
+  const ellipsis = " …";
+  const budget = max - ellipsis.length;
+  // Cut at the last full-move boundary that fits (split on spaces, never mid-token).
+  let out = "";
+  for (const token of pgn.split(" ")) {
+    if ((out ? out.length + 1 : 0) + token.length > budget) break;
+    out = out ? `${out} ${token}` : token;
+  }
+  return (out || pgn.slice(0, budget)) + ellipsis;
+}
+
 // Flatten the snapshot into the string key/value shape MIAW hidden prechat fields expect.
-// Keys here must match the parameter-mapped custom fields configured on the MIAW channel
-// (Phase 4) so they land as conversation variables the coach agent can read.
+// Keys here must match the custom parameters / channel variable names configured on the MIAW
+// channel (Phase 4) so they land as conversation variables the coach agent can read.
 export function gameStateForPrechat() {
   return {
-    Chess_PGN: state.pgn || "",
+    Chess_PGN: trimPgn(state.pgn || ""),
     Chess_FEN: state.fen || "",
     Chess_Turn: state.turn === "w" ? "White" : "Black",
     Chess_Move_Count: String(state.moveCount),
