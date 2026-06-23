@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Heroku release-phase script. Runs before each new release goes live.
+#
+# 1. db:prepare — create the database on first deploy, then apply primary migrations.
+# 2. Load the solid stack schemas (queue/cache/cable) into the SAME database.
+#
+# Why step 2 is needed: the Rails 8 solid stack ships separate *_schema.rb files meant for
+# separate databases. On Heroku we collapse all four connections onto one DATABASE_URL
+# (see config/database.yml), so db:prepare dedupes by database and only loads the primary
+# schema — the solid_* tables never get created and the worker dyno crashes with
+# "relation solid_queue_recurring_tasks does not exist". Loading the schemas explicitly here
+# is idempotent (force: :cascade) and safe to run on every release.
+set -e
+
+bin/rails db:prepare
+
+bin/rails runner '
+%w[db/queue_schema.rb db/cache_schema.rb db/cable_schema.rb].each do |f|
+  path = Rails.root.join(f)
+  next unless File.exist?(path)
+  # Skip if the marker table already exists, so re-runs are cheap and quiet.
+  marker = { "db/queue_schema.rb" => "solid_queue_jobs",
+             "db/cache_schema.rb" => "solid_cache_entries",
+             "db/cable_schema.rb" => "solid_cable_messages" }[f]
+  if marker && ActiveRecord::Base.connection.table_exists?(marker)
+    puts "release: #{f} already loaded (#{marker} present) — skipping"
+  else
+    puts "release: loading #{f}"
+    load path
+  end
+end
+'
