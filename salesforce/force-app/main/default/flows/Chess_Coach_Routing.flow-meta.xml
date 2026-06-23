@@ -107,14 +107,14 @@
         </inputParameters>
         <inputParameters>
             <name>routingType</name>
-            <value><stringValue>Bot</stringValue></value>
+            <value><stringValue>Copilot</stringValue></value>
         </inputParameters>
         <inputParameters>
-            <name>botId</name>
+            <name>copilotId</name>
             <value><stringValue>0Xxg8000000mw8DCAQ</stringValue></value>
         </inputParameters>
         <inputParameters>
-            <name>botLabel</name>
+            <name>copilotLabel</name>
             <value><stringValue>Chess Coach</stringValue></value>
         </inputParameters>
     </actionCalls>

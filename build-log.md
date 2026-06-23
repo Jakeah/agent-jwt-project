@@ -894,3 +894,26 @@ handles IDs):**
    These activate the param→flow-input injection; inert until the flow is attached.
 3. Agent Builder → Context → Messaging Session → **Edit Included Fields** → select 5 Chess_*__c.
 Then E2E: mid-game chat → coach knows the position without being asked.
+
+## 2026-06-23 — Omni-Flow routeWork does NOT assign the Agentforce Service Agent (broke chat)
+
+Switched channel to the Chess_Coach_Routing Omni-Flow → coach stopped entering the chat. Root cause
+found via routing records, NOT guessing:
+- New sessions (with the flow): **Status=Waiting, Owner=Default Queue Agentforce Contact Center**.
+- **PendingServiceRouting.RoutingType = QueueBased** for those sessions.
+- The OLD working (direct-to-agent) session: Owner = **Automated Process** (that's a correctly
+  agent-routed session).
+→ So `routeWork` fell through to **queue-based** routing (fallback queue, no human → waits forever),
+  regardless of routingType. Tried `routingType=Bot`+botId (legacy Einstein Bot) AND
+  `routingType=Copilot`+copilotId (BotDefinition.Type=ExternalCopilot). BOTH deploy clean but BOTH
+  produce QueueBased PSR — neither assigns the ASA/Copilot.
+- routeWork inputs include botId / copilotId / agentforceEmployeeAgentId / externalConversationBotId
+  / digitalWorkerId — but the right combination/routingType for an Agentforce SERVICE agent
+  (ExternalCopilot, Chess_Coach 0Xxg8000000mw8DCAQ) is unknown and not guessable safely.
+- **ACTION: reverting channel Routing Type → Agentforce Service Agent (direct) to restore the coach.**
+  The Omni-Flow (Chess_Coach_Routing v2, Active) stays deployed but UNATTACHED until we know the
+  correct routeWork config.
+- **ASK SLACKBOT:** in an Omni-Channel routing flow, what is the exact `routeWork` (or other action)
+  config to assign an **Agentforce Service Agent** (BotDefinition.Type=ExternalCopilot)? Which
+  id param + routingType value? Our attempts (Bot/botId, Copilot/copilotId) both produced
+  PendingServiceRouting.RoutingType=QueueBased and the session sat in the fallback queue.
