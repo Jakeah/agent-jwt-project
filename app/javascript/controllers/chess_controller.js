@@ -232,7 +232,7 @@ export default class extends Controller {
     const movePanel = this.#movePanelHtml();
 
     this.element.innerHTML = `
-      <div class="flex gap-6 items-start flex-wrap">
+      <div class="flex gap-6 items-start">
         ${movePanel}
         <div>
           ${boardHtml}
