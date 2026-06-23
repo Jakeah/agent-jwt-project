@@ -730,3 +730,38 @@ exists at API v64+ but exposes only DeveloperName/Language/MasterLabel/Descripti
 - "what opening is e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6?" → Ruy López.
 - The coach is now fully operational for ANY visitor (guest or verified). Verified-identity
   greeting-by-name still pends the org User-Verification preference (PM request out) — independent.
+
+## TODO — migrate engine coaching from Apex shim back to native MCP (when Beta unblocks)
+
+The Apex→REST-facade path is a **deliberate workaround** for the Beta MCP wall, NOT the desired
+end state. Once Salesforce's MCP support reveals the endpoint/tool fields and persists
+McpServerToolDefinition records (so `mcpTool://` targets resolve), migrate to native MCP and tear
+down the shim:
+
+**Done-when (native MCP works OOTB):**
+- [ ] Re-verify: `McpServerDefinition` createable fields include endpoint/NamedCredential, and
+      registering chess-mcp populates `McpServerToolDefinition` records with target IDs
+      (check via raw Tooling REST — `sf api request rest /tooling/query` is ground truth; the
+      CLI SOQL wrapper has given phantom counts before).
+- [ ] Re-point the agent's 4 actions to `mcpTool://ChessMCP/<tool>` (analyze_fen / best_move /
+      explain_move / name_opening) instead of the `apex://ChessCoach*` targets, in
+      `Chess_Coach.agent` (reasoning refs + action defs). The MCP server already exposes these
+      tools over Streamable HTTP at /mcp via the ChessMCP NamedCredential — no server change needed.
+- [ ] Validate (`sf agent validate`) + live-preview (`--use-live-actions`) the native tools, then
+      publish + activate.
+
+**Then remove the now-redundant shim:**
+- [ ] Delete Apex: ChessCoachAnalyzePosition / ChessCoachBestMove / ChessCoachJudgeMove /
+      ChessCoachNameOpening / ChessCoachClient (+ their tests in ChessCoachAnalysisTest).
+      (Keep ChessCoachGetPlayerName — that's the name-greeting action, unrelated to MCP.)
+- [ ] Trim Chess_Coach_Actions permission set: drop the 4 analysis classAccesses + the
+      externalCredentialPrincipalAccesses (ChessMCP-MCPAuthentication) + the UserExternalCredential
+      objectPermission IF nothing else needs them. Keep ChessCoachGetPlayerName class access.
+- [ ] Decide on the REST facade: the chess-mcp `/api/*` endpoints + `src/rest.js` can stay (handy
+      for testing / other clients) or be removed. The shared `src/tools.js` STAYS either way — the
+      native MCP path uses it too. The ChessCoachApi NamedCredential can be deleted with the Apex.
+- [ ] Update docs/agentforce-user-verification-guide.md + architecture doc to reflect native MCP.
+
+**Why both exist meanwhile:** the chess-mcp server already serves BOTH transports off the same
+`src/tools.js` — MCP (/mcp, for the future native binding) and REST (/api/*, for today's Apex
+shim). So flipping to native is purely a Salesforce-side rewire; the server is already ready.

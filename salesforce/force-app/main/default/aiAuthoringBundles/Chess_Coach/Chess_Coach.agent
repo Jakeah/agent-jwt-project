@@ -121,6 +121,12 @@ start_agent coach:
         # Backed by Apex invocable classes that call the chess coaching REST facade (Stockfish on
         # Heroku) via the ChessCoachApi Named Credential. This is the supported path while the
         # native mcpTool:// agent-action binding is blocked in Beta — same engine, HTTP callout.
+        #
+        # TODO (migrate to native MCP when Beta unblocks): re-point these 4 actions + their refs
+        # above to mcpTool://ChessMCP/<tool> (analyze_fen / best_move / explain_move / name_opening)
+        # and delete the ChessCoach{AnalyzePosition,BestMove,JudgeMove,NameOpening,Client} Apex +
+        # the ChessCoachApi cred + the perm-set grants. The MCP server already serves these tools
+        # OOTB at /mcp. Full checklist in build-log.md → "TODO — migrate engine coaching ... native MCP".
         analyze_position:
             description: "Evaluate a chess position (FEN). Returns the engine evaluation and best continuation."
             target: "apex://ChessCoachAnalyzePosition"
