@@ -203,7 +203,7 @@ export default class extends Controller {
         const capRing = isTarget && cell ? "ring-4 ring-inset ring-yellow-500/80" : "";
         // Same solid glyph for both colors: White is filled white with a dark outline (text-stroke),
         // Black is solid dark. This keeps every piece the identical shape.
-        const pieceClass = cell?.color === "w" ? "text-white chess-piece-white" : "text-slate-900";
+        const pieceClass = cell?.color === "w" ? "chess-piece-white" : "text-slate-900";
         cells += `
           <div data-action="click->chess#onSquareClick" data-square="${square}"
                class="relative w-14 h-14 md:w-16 md:h-16 flex items-center justify-center
