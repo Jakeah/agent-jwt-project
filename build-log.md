@@ -377,3 +377,175 @@ State of the world:
 **Phase 6:** deploy Rails to chess-agent-jwt. **Phase 7:** architecture doc + demo script.
 **To revisit MCP:** uncomment the 4 mcpTool actions in `Chess_Coach.agent` once the
 McpServerToolDefinition target-ID binding resolves; re-validate + re-publish.
+
+## 2026-06-22 — Resume Phase 4b: docs research + autonomous prep done; Setup runbook next
+
+Picked the project back up at MIAW + User Verification. Did the parts that don't need the
+Setup UI; the rest is a click-through runbook handed to the user (same division of labour as
+the MCP registration — Beta-era MIAW/User-Verification config isn't cleanly deployable metadata).
+
+### Doc research — exact JWT claim set is deliberately NOT in public docs
+- Confirmed from `developer.salesforce.com/docs/service/messaging-web/guide/user-verification`
+  + the `userVerificationAPI` reference: **only** RS256/RS512 + the client API
+  (`setIdentityToken({identityTokenType:"JWT", identityToken})`) are documented. The required
+  **claim set and the subject→Contact mapping are NOT published** — they're resolved in the
+  org's Messaging Settings at registration time. (Help article `service.user_verification.htm`
+  renders, but is a hub: token-based claim specifics live behind the Setup UI, not the doc.)
+  → So the "confirm exact claims + sub→Contact field" open item is resolved **empirically in
+  Setup**, not from docs. Working claim set stays: iss / sub(=email) / aud / iat / exp + kid header.
+- Stood up the `fetching-salesforce-docs` skill's isolated Playwright runtime
+  (`~/.claude/.fetching-salesforce-docs-runtime`, venv + chromium) — one-time, reusable.
+
+### Autonomous prep completed
+- **Org id captured:** `00Dg8000008l1AcEAI` (chess-agent,
+  trailsignup.e8eb68b2222256@salesforce.com, instance
+  `https://trailsignup-e8eb68b2222256.my.salesforce.com`). Filled into
+  `config/agent_deployments.yml` `chess_support.org_id` (was a TODO).
+- **Test Contact seeded:** Jordan Player / player@example.com (`003g800000KXhnRAAT`) — matches
+  the local dev Rails user (`player@example.com`). This is the verified-greeting target: the
+  coach's `get_player_name` returns "Jordan" once `ContactId` flows from MessagingEndUser.
+- **Confirmed clean slate:** `SELECT ... FROM MessagingChannel` → 0 records. No MIAW channel
+  exists yet, so Phase 4b starts fresh.
+- ⚠️ CLI gotcha (again): the `sf` autoupdate warning prints to **stdout** and breaks
+  `| python3 json.load`. Set `SF_AUTOUPDATE_DISABLE=true` for clean JSON.
+
+### Still TODO in registry (filled from the Setup bootstrap snippet in step 5 below)
+`deployment_name`, `site_url`, `scrt2_url`, `audience`. org_id + issuer + key_id already set.
+
+### NEXT — Setup-UI runbook (user drives; I capture results)
+1. Messaging Settings → new **Messaging for In-App and Web** channel + **Embedded Service
+   deployment**; attach **Chess Coach** agent. Capture ESW dev name + bootstrap snippet.
+2. Allowed domains: `http://localhost:3000`,
+   `https://chess-agent-jwt-95c105a581a5.herokuapp.com`.
+3. **User Verification:** Add User Verification on the channel; upload the RS256 public key
+   (`config/keys/identity_jwt.public.pem`, label/kid `chess-identity-key-1`). Read back the
+   exact required claims + the **audience** value Setup expects + the **sub→Contact** mapping
+   field. Update registry `audience` + IdentityToken if different from email-as-sub.
+4. Parameter-mapped prechat fields → conversation vars: Chess_PGN/FEN/Turn/Move_Count/Status.
+5. Capture bootstrap snippet → fill registry chess_support TODO fields.
+6. (Done early) Seed test Contact — ✅ Jordan Player above.
+
+## 2026-06-22 — Phase 4b LIVE: MIAW channel + User Verification configured (with user, Setup UI)
+
+Worked the Setup UI together. Resolved the long-standing "exact claims + sub→Contact + audience"
+open item **empirically** — the published docs deliberately omit it; the org's Setup model is
+the source of truth. Findings below are the real, in-org answer.
+
+### MIAW channel + Embedded Service deployment — CREATED
+- **MessagingChannel** `Chess_Coach_Web` (`0Mjg8000000J9pBCAS`), Type **Embedded Messaging**,
+  Platform **Enhanced**, active. Messaging Platform Key `0d092d88-c89c-4b13-8155-6dff51032bc2`.
+- Routing: **Agentforce Service Agent → Chess Coach**. Fallback Queue required → see gotcha.
+- **Embedded Service deployment** `Chess_Coach_Web` (Site `0DMg8000001A30s`, ClientVersion WebV1).
+- **Bootstrap snippet captured** (filled all remaining registry TODOs in
+  `config/agent_deployments.yml`):
+  - org id (15-char, as init() expects): `00Dg8000008l1Ac`
+  - deployment_name: `Chess_Coach_Web`
+  - site_url: `https://trailsignup-e8eb68b2222256.my.site.com/ESWChessCoachWeb1782171470213`
+  - scrt2_url: `https://trailsignup-e8eb68b2222256.my.salesforce-scrt.com`
+  - bootstrap.min.js: `<site_url>/assets/js/bootstrap.min.js`
+
+### GOTCHA — Fallback Queue is REQUIRED and must support MessagingSession
+- The Channel Routing step won't save without a Fallback Queue, and the picker only lists
+  queues whose supported objects include **MessagingSession**. The org's lone queue
+  (`Default_Queue_Agentforce_Contact_Center`, `00Gg8000003sCbxEAE`) wasn't enabled for it →
+  didn't appear. Fix (CLI, no UI): create a `QueueSobject` row
+  `QueueId=00Gg8000003sCbxEAE SobjectType=MessagingSession` (`03gg8000000aQVRAA2`). Then it
+  shows in the picker. (Platform dedupes a double-insert, so one mapping remains.)
+
+### User Verification — the REAL model (resolves the open item)
+Setup node: **Setup → Service → Embedded Service → Enhanced Chat User Verification** (NOT the
+channel Edit screen; not deployable metadata in this build). It uses a **JWKS** model, not a
+raw-PEM-on-the-channel model:
+- **JSON Web Key** = the public key. Form: Name, API Name, Active, Description, **Upload Files**
+  (a file, no n/e fields). Uploaded `config/keys/identity_jwk.json` — a single JWK that embeds
+  `kid: chess-identity-key-1` (generated from our public.pem via Ruby OpenSSL → base64url n/e).
+  Created key **chess-identity-key-1**. (Also wrote `identity_jwks.json` keyset-wrapper +
+  kept `.public.pem` as PEM fallbacks; the single JWK was accepted.)
+- **JSON Web Keyset** = groups keys + carries the **JSON Web Key Issuer** (= our JWT `iss`).
+  Form: Name, API Name, **JSON Web Key Issuer**, Description, **Type {Keys | Endpoint}**, **Keys**
+  (attach). Created `Chess_Identity_Keyset`, Type **Keys** (attach uploaded key directly;
+  "Endpoint" = remote JWKS URL we'd host), Issuer
+  `https://chess-agent-jwt-95c105a581a5.herokuapp.com`, attached chess-identity-key-1.
+- **⚠️ CLAIM-SET ANSWER:**
+  - **`iss`** MUST byte-match the Keyset's JSON Web Key Issuer (no trailing slash). ✅ aligned
+    with registry `issuer`.
+  - **`kid`** (header) MUST match the JSON Web Key's embedded kid → resolves which key verifies.
+    ✅ `chess-identity-key-1`.
+  - **NO audience field exists** in the key/keyset config. Trust = **issuer + signature(kid)**,
+    NOT `aud`. So `aud` is not validated against a configured Setup value here. Set registry
+    `audience` to the org My Domain (`https://trailsignup-e8eb68b2222256.my.salesforce.com`) as
+    a stable recipient; confirm empirically via session trace, adjust only if runtime rejects.
+  - **sub→Contact mapping:** not a field on this UV config either. The verified `sub` surfaces
+    on the **MessagingEndUser**; the coach reads `@MessagingEndUser.ContactId`. The sub→Contact
+    resolution is the runtime's job (matched when the conversation is created), validated E2E.
+- None of these UV entities are queryable via standard SObject API (JsonWebKey / keyset not
+  exposed) — the Setup screen is ground truth.
+
+### Test Contact (verified-greeting target) — seeded earlier
+Jordan Player / player@example.com (`003g800000KXhnRAAT`), matches local dev Rails user.
+
+### Registry now COMPLETE — zero TODOs in config/agent_deployments.yml.
+
+**STILL in Phase 4b (Setup UI):** (a) allowed domains (localhost:3000 + Heroku);
+(b) prechat parameter mapping for Chess_PGN/FEN/Turn/Move_Count/Status → conversation vars.
+**THEN Phase 5:** Rails embed + agentforce_controller.js.
+
+### GOTCHA — MIAW custom parameter String max length is capped at 255
+Channel custom parameters (Messaging Settings → channel → Custom Parameters → New): Data Type
+**String** forces a **Maximum Length** field whose ceiling is **255**. Implication: **Chess_PGN
+can exceed 255 chars** for a long game. Decisions:
+- All 5 params created String/255, names identical across Parameter Name / Parameter API Name /
+  Channel Variable Name (= the agent's conversation var names): Chess_PGN, Chess_FEN, Chess_Turn,
+  Chess_Move_Count, Chess_Status. Keeping names byte-identical avoids any client→channel→agent
+  translation bug.
+- **Phase 5 client must trim Chess_PGN to ≤255** before setHiddenPrechatFields. FEN is the
+  position-of-record (always short, used by the coach for analysis), so trimming PGN narration
+  doesn't hurt coaching. (TBD trim strategy: keep move tail vs. head — head preserves opening-
+  name recognition; revisit in client code.)
+- **Parameter Mappings** section maps params → *Flow* variables ("Flow Variable Name"). Our
+  Chess Coach is an Agentforce Service Agent reading conversation variables directly, NOT via a
+  flow — so Parameter Mappings likely NOT needed. Deferred; confirm via E2E session trace.
+
+### Phase 4b COMPLETE
+- 5 custom parameters created (String/255, names identical across all 3 fields): Chess_PGN,
+  Chess_FEN, Chess_Turn, Chess_Move_Count, Chess_Status.
+- **Parameter Mappings NOT created** — that section maps to a *Flow* ("Flow Variable Name").
+  Routing goes directly to the Agentforce Service Agent (no flow), which reads the Channel
+  Variable Name as its conversation variable. Confirm via E2E session trace; add mappings only
+  if the agent doesn't see the values.
+- CORS Allowed Origins added: https://chess-agent-jwt-95c105a581a5.herokuapp.com + http://localhost:3000.
+- Registry config/agent_deployments.yml fully populated (zero TODOs).
+→ Phase 4 (4a coach + 4b MIAW/User-Verification) DONE. Next: Phase 5 — Rails embed +
+  agentforce_controller.js (setIdentityToken on ready, trimmed Chess_PGN in
+  setHiddenPrechatFields, re-mint on expiry, clearSession on logout).
+
+## 2026-06-22 — Phase 5: Rails embed + verification wiring DONE (tests green)
+
+Built the client side that hands verified identity + live game context to the MIAW widget.
+
+- **`app/javascript/controllers/agentforce_controller.js`** (new Stimulus controller). Lifecycle:
+  - `connect()` injects the bootstrap script (idempotent across Turbo nav; guards on
+    `window.embeddedservice_bootstrap` + a `#esw-bootstrap` script id).
+  - `onEmbeddedMessagingReady` → `fetch('/identity_token?deployment=…')` →
+    `userVerificationAPI.setIdentityToken({identityTokenType, identityToken})`, then seeds game
+    context.
+  - `onEmbeddedMessagingIdentityTokenExpired` → re-mint + setIdentityToken (30s window).
+  - `endSession()` → `userVerificationAPI.clearSession({shouldEndSession:true})` on sign-out.
+  - All Salesforce specifics come in as Stimulus *values* from the registry — nothing hardcoded
+    (SOMA/MOMA stays a config change).
+- **Layout** (`application.html.erb`): mounted `data-controller="agentforce"` **on `<body>`**
+  (not a sibling div) so the sign-out button is inside the controller scope and
+  `submit->agentforce#endSession` actually fires. Gated on `user_signed_in?`. Values fed by a
+  new helper `current_agent_deployment` (= registry default for now).
+- **`game_state.js`**: added `trimPgn()` — Chess_PGN capped at 255 (the channel-param ceiling),
+  trimmed on a whole-move boundary + " …", keeping the OPENING (head) so the coach can still
+  name the opening; FEN stays the position-of-record for analysis. Unit-sanity-checked via node.
+- **Tests:** new `test/integration/agentforce_embed_test.rb` — verified user gets the controller
+  + all registry-sourced data-* values + the endSession-wired sign-out form; anonymous visitor
+  gets neither (no leaked config). Full suite **9 runs / 39 assertions / 0 failures**.
+- **CSP note:** `config/initializers/content_security_policy.rb` is all-commented (Rails default,
+  no CSP enforced) → embed's cross-origin script + SCRT2 websocket aren't blocked by our app.
+  If CSP is enabled later, must allowlist the ESW site_url (script-src) + scrt2_url (connect-src).
+  Hardening item, not a demo blocker.
+→ Next: Phase 6 (deploy Rails to chess-agent-jwt Heroku + set IDENTITY_JWT_PRIVATE_KEY config
+  var) so the allowed-domain/HTTPS path can be exercised, then E2E verification.

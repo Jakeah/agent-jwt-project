@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "chess-identity-key-1",
+      "n": "wlwZF92LsAd8oLlQUy6GCTX_zxYemh-TXCUmGDzeUwCikNytzVeLeTewQ8obn6sIv9fv5mrAKYFcgr3pWUzn91xk288gjc_MTb2P21aovjm5Cc0TkIF1lW-rTuVEOejxFOwOEFPwscN014EnvusO0tbqeQbWuUajFd0gKPy5Naq2yE0uSBHUNQurdaPeODnqVpnfuGciQKgbF7n_ioVP_7JWHOy6yVs-aImupLEPl_ursG22hAMbqk9gmnpt8aEx8Tsbu9hiXh84vJ2snT2qimj0fsKBQVoHQX7wbFeqAyzkMJMc5jRAo3CUTXd2VCuVRV2umAL8OjDVcx_HnFF_YQ",
+      "e": "AQAB"
+    }
+  ]
+}

@@ -15,12 +15,12 @@ default_deployment: chess_support
 deployments:
   chess_support:
     label: "Chess Support (chess-agent org)"
-    org_id: "TODO_18CHAR_ORG_ID"            # Salesforce org id (Phase 4)
-    deployment_name: "TODO_ESW_DEV_NAME"    # Embedded Service deployment dev name (Phase 4)
-    site_url: "TODO_ESW_SITE_URL"           # ESW bootstrap base URL (Phase 4)
-    scrt2_url: "TODO_SCRT2_URL"             # SCRT2 messaging URL (Phase 4)
+    org_id: "00Dg8000008l1Ac"               # Salesforce org id (15-char, as embeddedservice_bootstrap.init expects)
+    deployment_name: "Chess_Coach_Web"       # Embedded Service deployment dev name
+    site_url: "https://trailsignup-e8eb68b2222256.my.site.com/ESWChessCoachWeb1782171470213"  # ESW bootstrap base URL
+    scrt2_url: "https://trailsignup-e8eb68b2222256.my.salesforce-scrt.com"  # SCRT2 messaging URL
     # --- User Verification JWT claims ---
     issuer: "https://chess-agent-jwt-95c105a581a5.herokuapp.com"   # JWT `iss` — this app
-    audience: "TODO_VERIFICATION_AUDIENCE"  # JWT `aud` — confirm exact value in Setup (Phase 4)
+    audience: "https://trailsignup-e8eb68b2222256.my.salesforce.com"  # JWT `aud` — Setup keys trust on iss+kid (no aud field in the keyset); this is the org My Domain as recipient. Confirm empirically via session trace; adjust if the runtime rejects on aud.
     key_id: "chess-identity-key-1"          # JWT header `kid` — matches the public key label in Setup
     token_ttl_seconds: 300                  # short-lived (5 min)
