@@ -849,3 +849,25 @@ Built the foundation, then hit a routing wrinkle worth confirming before buildin
   Update-Records→MessagingSession step lives for a **direct-to-agent (no Omni queue/skills)**
   channel — is a routing-flow switch required, or is there an inbound/routing hook for
   agent-routed channels? Question drafted; awaiting answer.
+
+## 2026-06-23 — Slackbot resolved routing; agent-side binding now PUBLISHES
+
+Slackbot confirmed: "direct-to-agent" IS an Omni-Flow — there's no path that bypasses Omni-Channel.
+Switching RoutingType None → Omni-Flow PRESERVES direct-to-agent (the flow's Route Work→Bot element
+== the old shortcut). Parameter Mappings are inert until the flow exists, then auto-activate. Full
+recipe in docs/miaw-prechat-to-agent-guide.md (minimal flow: Update Records → MS fields, then Route
+Work → Bot).
+
+Did everything authorable as metadata:
+- ✅ FLS read on the 5 Chess_*__c fields → Chess_Coach_Actions perm set (deployed).
+- ✅ Agent vars flipped to `linked` + `source: @MessagingSession.Chess_*__c` — **PUBLISHES +
+  ACTIVATES now** (the earlier publish failure was purely the missing field; source syntax was
+  right all along). Until the flow writes the fields they read empty (agent asks for FEN — harmless).
+
+REMAINING (all Setup UI — see guide checklist; metadata-authoring a routing flow blind is too risky):
+1. Parameter Mappings: each Custom Parameter Chess_* → Flow Variable Chess_* (case-exact). [we
+   deferred these earlier — Slackbot's checklist assumed done, but they're NOT in our org yet]
+2. Omni-Flow (Flow Builder): 5 Text input vars → Update Records on MessagingSession ($Record.Id)
+   writing Chess_*__c → Route Work (Bot = Chess Coach). Activate.
+3. Channel Routing Type → Omni-Flow, select the flow.
+4. Agent Builder → Context → Messaging Session → Edit Included Fields → select the 5 Chess_*__c.

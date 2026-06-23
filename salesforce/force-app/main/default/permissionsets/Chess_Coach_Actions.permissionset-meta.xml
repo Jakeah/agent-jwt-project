@@ -43,4 +43,31 @@
         <viewAllRecords>false</viewAllRecords>
         <modifyAllRecords>false</modifyAllRecords>
     </objectPermissions>
+    <!-- FLS read on the MessagingSession game-context fields so the agent can read them as
+         @MessagingSession.Chess_*__c (populated by the Omni-Flow from the hidden prechat fields). -->
+    <fieldPermissions>
+        <field>MessagingSession.Chess_FEN__c</field>
+        <readable>true</readable>
+        <editable>false</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>MessagingSession.Chess_PGN__c</field>
+        <readable>true</readable>
+        <editable>false</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>MessagingSession.Chess_Turn__c</field>
+        <readable>true</readable>
+        <editable>false</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>MessagingSession.Chess_Move_Count__c</field>
+        <readable>true</readable>
+        <editable>false</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>MessagingSession.Chess_Status__c</field>
+        <readable>true</readable>
+        <editable>false</editable>
+    </fieldPermissions>
 </PermissionSet>

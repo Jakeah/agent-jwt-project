@@ -26,23 +26,27 @@ variables:
         source: @MessagingSession.EndUserLanguage
         description: "MessagingSession EndUserLanguage"
 
-    # --- On-screen game context (set from MIAW hidden prechat fields → conversation variables) ---
-    # OPEN ITEM: how a MIAW hidden prechat field / channel custom parameter binds to an Agentforce
-    # conversation variable is unresolved. `linked` with source @MessagingSession.Chess_* validates
-    # but FAILS PUBLISH ("no access to field MessagingSession.Chess_PGN" — no such field exists; the
-    # custom parameters don't materialize as MessagingSession fields). `@context.*` is rejected by
-    # the compiler (source must be @MessagingSession/@MessagingEndUser/@VoiceCall). Kept `mutable`
-    # so the agent publishes; awaiting the authoritative binding mechanism (Slackbot/internal docs).
-    # Meanwhile game context is conveyed in-conversation (FEN given/asked in chat).
-    Chess_PGN: mutable string = ""
+    # --- On-screen game context ---
+    # MIAW hidden prechat fields → channel Custom Parameters → Omni-Flow Update Records →
+    # MessagingSession.Chess_*__c custom fields → read here. (See docs/miaw-prechat-to-agent-guide.md
+    # for the full 5-layer pipeline.) The source must be @MessagingSession.<field>__c — @context.*
+    # is rejected by the compiler. These fields exist + the agent user has FLS; values populate once
+    # the Omni-Flow is attached to the channel (Routing Type = Omni-Flow). Until then they read empty
+    # and the agent falls back to asking for the FEN — harmless.
+    Chess_PGN: linked string
+        source: @MessagingSession.Chess_PGN__c
         description: "Moves played so far in the current game, in PGN."
-    Chess_FEN: mutable string = ""
+    Chess_FEN: linked string
+        source: @MessagingSession.Chess_FEN__c
         description: "Current board position in FEN — pass this to the analysis tools."
-    Chess_Turn: mutable string = ""
+    Chess_Turn: linked string
+        source: @MessagingSession.Chess_Turn__c
         description: "Whose move it is now: White or Black."
-    Chess_Move_Count: mutable string = ""
+    Chess_Move_Count: linked string
+        source: @MessagingSession.Chess_Move_Count__c
         description: "How many full moves have been played."
-    Chess_Status: mutable string = ""
+    Chess_Status: linked string
+        source: @MessagingSession.Chess_Status__c
         description: "Game status: active or over."
 
     # --- Verified player's display name, looked up from the Contact ---

@@ -50,21 +50,48 @@ NOT a `source: @context.*` prechat binding. (`@context.*` does not exist for thi
 - **Custom fields created on the MessagingSession object** to hold the values — standard fields
   have no slot for arbitrary prechat data.
 
+## Key fact: "direct-to-agent" IS an Omni-Flow
+
+There is no routing path that bypasses Omni-Channel. The MIAW channel's Routing Type must be
+**Omni-Flow**; "direct to agent" just means a trivial flow whose only routing element is
+**Route Work → Bot = your agent**. Switching from our current `RoutingType=None` to Omni-Flow
+**preserves** the direct-to-agent behavior — the Route Work/Bot element is functionally identical
+to the old shortcut. So this is an additive change, not a re-architecture. Parameter Mappings are
+**inert until the flow exists**, then activate automatically (no reconfig).
+
 ## Build checklist for this project (chess FEN/PGN → Chess Coach)
 
-- [ ] Create MessagingSession custom fields: `Chess_FEN__c`, `Chess_PGN__c`, `Chess_Turn__c`,
-      `Chess_Move_Count__c`, `Chess_Status__c` (Text; FEN ~120, PGN long-text or 255 to match the
-      255 prechat cap, Turn/Status short).
-- [ ] Custom Parameters already exist (Chess_FEN etc., Channel Variable Names match the client keys).
-- [ ] **Omni-Channel routing Flow** with Parameter Mappings (param → flow input) + an **Update
-      Records** element writing each flow var into the matching `MessagingSession.*__c`. NOTE: the
-      channel currently routes DIRECTLY to the Agentforce agent (RoutingType None, no flow) — this
-      flow is the main new build.
-- [ ] Agent Context → Messaging Session → **Edit Included Fields** → select the 5 `*__c` fields.
-- [ ] `.agent`: change the 5 Chess_* vars to `linked string` with `source: @MessagingSession.Chess_FEN__c`
-      (etc.). Validate → publish → activate.
-- [ ] Grant the agent user FLS read on the 5 fields (add to Chess_Coach_Actions perm set).
+- [x] **MessagingSession custom fields** created + deployed: `Chess_FEN__c`(120), `Chess_PGN__c`(255),
+      `Chess_Turn__c`(10), `Chess_Move_Count__c`(10), `Chess_Status__c`(20). (objects/MessagingSession/fields/)
+- [x] **Custom Parameters** exist (Chess_FEN etc.; Channel Variable Names match the client keys).
+- [ ] **Parameter Mappings** — NOT yet created (we deferred them). Messaging Settings → channel →
+      Parameter Mappings → for each: Parameter `Chess_FEN` → **Flow Variable Name** `Chess_FEN`
+      (case-exact). Repeat for all 5.
+- [ ] **Omni-Flow** (Flow Builder UI — raw-metadata authoring is high-risk for routing flows):
+      - New Flow → **Omni-Channel Flow** (a.k.a. routing flow; `$Record` = MessagingSession).
+      - **5 input variables** (Text, *Available for input*): `Chess_FEN`, `Chess_PGN`, `Chess_Turn`,
+        `Chess_Move_Count`, `Chess_Status` — names case-exact to the Parameter Mappings.
+      - **Update Records** element: object MessagingSession, record `{!$Record.Id}` (the session),
+        set `Chess_FEN__c = {!Chess_FEN}`, … all 5.
+      - **Route Work** element: Routing Type **Bot**, Bot = the Chess Coach Agentforce agent.
+        (This replaces the old direct-to-agent shortcut, same behavior.)
+      - Activate the flow.
+- [ ] **Channel Routing Type → Omni-Flow**, select this flow. Messaging Settings → channel → Edit.
+- [ ] **Agent Context** → Messaging Session → **Edit Included Fields** → select the 5 `*__c` fields.
+- [ ] `.agent`: change the 5 Chess_* vars to `linked string` + `source: @MessagingSession.Chess_FEN__c`
+      (etc.). Validate → publish → activate. (Source syntax is correct; it only failed before
+      because the field didn't exist.)
+- [ ] FLS read on the 5 fields for the agent user (add to Chess_Coach_Actions perm set).
 - [ ] E2E: open chat mid-game → agent references the position without being asked for a FEN.
+
+### Minimal Omni-Flow shape
+```
+[Start: Omni-Channel Flow, $Record = MessagingSession]
+   → Update Records: MessagingSession {!$Record.Id}
+        Chess_FEN__c={!Chess_FEN}  Chess_PGN__c={!Chess_PGN}  Chess_Turn__c={!Chess_Turn}
+        Chess_Move_Count__c={!Chess_Move_Count}  Chess_Status__c={!Chess_Status}
+   → Route Work: Routing Type=Bot, Bot=Chess Coach
+```
 
 ## Mobile exception
 
