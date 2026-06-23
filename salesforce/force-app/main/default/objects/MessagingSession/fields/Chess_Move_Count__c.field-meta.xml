@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Chess_Move_Count__c</fullName>
+    <label>Chess Move Count</label>
+    <type>Text</type>
+    <length>10</length>
+    <required>false</required>
+    <description>On-screen chess game context passed from the web app via MIAW hidden prechat field, written here by the Omni routing flow so the Chess Coach agent can read it.</description>
+</CustomField>

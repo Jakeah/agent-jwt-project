@@ -830,3 +830,22 @@ FLS on the new fields; MessagingSession custom fields created.
 3. Agent Context: include the 5 fields.
 4. .agent: Chess_* → linked, source @MessagingSession.Chess_*__c. Publish + activate.
 5. FLS read on the 5 fields → Chess_Coach_Actions perm set. E2E test.
+
+## 2026-06-23 — Prechat pipeline: custom fields built; routing question open
+
+Built the foundation, then hit a routing wrinkle worth confirming before building the flow.
+
+- ✅ **5 MessagingSession custom fields deployed:** Chess_FEN__c (120), Chess_PGN__c (255),
+  Chess_Turn__c (10), Chess_Move_Count__c (10), Chess_Status__c (20). Under
+  objects/MessagingSession/fields/. This is the slot the agent reads + why
+  @MessagingSession.Chess_FEN failed publish before (no field existed).
+- ⚠️ **Routing wrinkle:** the Slackbot pipeline (Parameter Mapping → Omni-Flow Update Records →
+  MessagingSession field) assumes an **Omni-Channel routing flow**. But our channel routes
+  **directly to the Agentforce agent** — `MessagingChannel.Chess_Coach_Web.RoutingType = None`
+  (picklist options are OmniQueue / OmniSkills; neither set). There is no Omni-Flow in the path.
+  Introducing one may require re-pointing the channel's routing, which could disrupt the working
+  direct-to-agent connection.
+- **Decision:** before authoring a routing flow blind, ask Slackbot where the
+  Update-Records→MessagingSession step lives for a **direct-to-agent (no Omni queue/skills)**
+  channel — is a routing-flow switch required, or is there an inbound/routing hook for
+  agent-routed channels? Question drafted; awaiting answer.
