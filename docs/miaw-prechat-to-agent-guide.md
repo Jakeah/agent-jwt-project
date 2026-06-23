@@ -1,6 +1,7 @@
 # Passing app data into an Agentforce agent via MIAW hidden prechat fields
 
-**Last verified:** 2026-06-23 (mechanism confirmed via internal docs; pipeline build in progress)
+**Last verified:** 2026-06-23 (pipeline confirmed working END-TO-END live — agent reasons about the
+on-screen FEN without being asked)
 
 How to get a value from your web app (here: the live chess FEN/PGN) into an **Agentforce service
 agent**'s reasoning, through **Messaging for In-App and Web (Enhanced Web Chat)** hidden prechat
@@ -57,7 +58,20 @@ There is no routing path that bypasses Omni-Channel. The MIAW channel's Routing 
 **Route Work** that routes to the agent. Switching to Omni-Flow **preserves** direct-to-agent
 behavior. Parameter Mappings are **inert until the flow exists**, then activate.
 
-## ⚠️ Three gotchas that cost hours (read before debugging)
+## ⚠️ Four gotchas that cost hours (read before debugging)
+
+**0. Pre-Chat must be ACTIVE on the Embedded Service Deployment — this was THE root cause.**
+If Pre-Chat is not activated on the ESD, SCRT2 **silently drops every hidden prechat field at the
+front door.** The client's `setHiddenPrechatFields({...})` is accepted by the widget (console hooks
+show the values being sent) but the values never enter the conversation, so the Omni-Flow's input
+variables arrive **null** — and every downstream layer (param mappings, flow vars, Update Records,
+FLS, agent linked vars) looks perfectly correct while delivering nothing. We burned hours suspecting
+the param-mapping→flow-input hop when the fields were never being let through at all.
+Fix: Setup → Embedded Service Deployment → **enable/activate Pre-Chat**; confirm the hidden fields are
+in **Hidden Pre-Chat Fields → Selected** (activation and field-selection are two separate switches);
+then **Publish the deployment** (ESD changes are invisible to the live site until republished) and
+hard-refresh (the bootstrap script is cached). When debugging "values arrive null," check THIS first —
+it's upstream of the entire pipeline below.
 
 **1. Don't hand-author the Route Work element — clone the stock flow.**
 Routing to an **Agentforce Service Agent** is NOT `routeWork` with `routingType=Bot`+`botId` or
@@ -78,42 +92,47 @@ look like they never deployed. (`sf org assign permset --name <set>` for the run
 
 **3. Parameter Mappings can show as "present" in the UI but be SILENTLY UNHOOKED.**
 The Custom Parameters existed and the mappings *appeared* in Setup, but the retrieved channel metadata
-showed every `<actionParameterMappings>` block **empty** — the param→flow-variable binding was blank,
-with zero UI indication. Result: the flow's input vars arrive empty → Update Records writes nulls →
-the agent field stays None even when routing, flow, and fields are all correct. **Verify by retrieving
-the MessagingChannel metadata and checking `<actionParameterMappings>` is non-empty** — do not trust
-the UI. Likely cause: mappings created *before* an active routing flow existed don't bind; recreate
-them once the flow is active.
+showed every `<actionParameterMappings>` block **empty** — created before an active routing flow
+existed, the bindings hadn't taken. Recreating them once the v2 flow was active populated them
+(`<actionParameterMappings><actionParameterName>Chess_FEN</actionParameterName></actionParameterMappings>`).
+**Verify by retrieving the MessagingChannel metadata and checking `<actionParameterMappings>` is
+non-empty** — don't trust the UI. NOTE: a non-empty mapping with only `<actionParameterName>` IS
+complete (the binding is by matching name; there is no flow-reference element — see the checklist).
+**Caveat learned the hard way:** even a correctly-bound mapping delivers nothing if Pre-Chat is
+inactive on the ESD (gotcha 0). When values arrive null, rule out gotcha 0 FIRST — we wrongly
+fixated on this mapping for hours while the real cause was the dropped-at-SCRT2 pre-chat fields.
 
 ## Build checklist for this project (chess FEN/PGN → Chess Coach)
 
 - [x] **MessagingSession custom fields** created + deployed: `Chess_FEN__c`(120), `Chess_PGN__c`(255),
       `Chess_Turn__c`(10), `Chess_Move_Count__c`(10), `Chess_Status__c`(20). (objects/MessagingSession/fields/)
 - [x] **Custom Parameters** exist (Chess_FEN etc.; Channel Variable Names match the client keys).
-- [ ] **Parameter Mappings** — NOT yet created (we deferred them). Messaging Settings → channel →
-      Parameter Mappings → for each: Parameter `Chess_FEN` → **Flow Variable Name** `Chess_FEN`
-      (case-exact). Repeat for all 5.
-- [x] **Omni-Flow** — `Chess_Coach_Routing` (RoutingFlow, Active) AUTHORED AS METADATA + deployed.
-      Update Records → MessagingSession.Chess_*__c (filter Id = recordId) → routeWork (routingType
-      Bot, serviceChannelId 0N9g8000000ytHlCAI / sfdc_livemessage, botId 0Xxg8000000mw8DCAQ Chess
-      Coach). force-app/main/default/flows/Chess_Coach_Routing.flow-meta.xml. (Originally thought
-      UI-only — it's metadata-authorable; iterated via --dry-run then active deploy.)
-- [ ] ~~Omni-Flow (UI)~~ superseded by the metadata flow above; remaining flow detail:
-      - New Flow → **Omni-Channel Flow** (a.k.a. routing flow; `$Record` = MessagingSession).
-      - **5 input variables** (Text, *Available for input*): `Chess_FEN`, `Chess_PGN`, `Chess_Turn`,
-        `Chess_Move_Count`, `Chess_Status` — names case-exact to the Parameter Mappings.
-      - **Update Records** element: object MessagingSession, record `{!$Record.Id}` (the session),
-        set `Chess_FEN__c = {!Chess_FEN}`, … all 5.
-      - **Route Work** element: Routing Type **Bot**, Bot = the Chess Coach Agentforce agent.
-        (This replaces the old direct-to-agent shortcut, same behavior.)
-      - Activate the flow.
-- [ ] **Channel Routing Type → Omni-Flow**, select this flow. Messaging Settings → channel → Edit.
-- [ ] **Agent Context** → Messaging Session → **Edit Included Fields** → select the 5 `*__c` fields.
-- [ ] `.agent`: change the 5 Chess_* vars to `linked string` + `source: @MessagingSession.Chess_FEN__c`
-      (etc.). Validate → publish → activate. (Source syntax is correct; it only failed before
-      because the field didn't exist.)
-- [ ] FLS read on the 5 fields for the agent user (add to Chess_Coach_Actions perm set).
-- [ ] E2E: open chat mid-game → agent references the position without being asked for a FEN.
+- [x] **Parameter Mappings** — created + bound. The mapping binds the channel Custom Parameter to the
+      flow input variable **by matching name**: the channel metadata is just
+      `<actionParameterMappings><actionParameterName>Chess_FEN</actionParameterName></actionParameterMappings>`
+      and that name must equal the flow input variable's name (`Chess_FEN`), case-exact. There is NO
+      separate flow-reference / "flow variable name" element — `MessagingChannelActionParameterMapping`
+      accepts ONLY `<actionParameterName>` (deploying a `<flowVariableName>` child FAILS:
+      "Element flowVariableName invalid at this location"). The Setup UI's "Flow Variable Name" field
+      writes into `<actionParameterName>`. Mappings only bind once an ACTIVE routing flow exists.
+- [x] **Omni-Flow** — `Chess_Coach_Routing_v2` (RoutingFlow, Active), cloned via "Save As New Flow"
+      from the stock `AiCopilot__LanguageChat` so the Route Work uses Route To = Agentforce Service
+      Agent (see gotcha 1). 5 Text input vars (Available for input): `Chess_FEN`, `Chess_PGN`,
+      `Chess_Turn`, `Chess_Move_Count`, `Chess_Status` (case-exact to the Parameter Mappings). Update
+      Records → MessagingSession.Chess_*__c (filter Id = recordId) → Route to agent. Vendored at
+      force-app/main/default/flows/Chess_Coach_Routing_v2.flow-meta.xml. (The old hand-authored
+      `Chess_Coach_Routing` with routingType=Bot/Copilot is obsolete — it fell through to QueueBased.)
+- [x] **Channel Routing → the v2 flow.** Channel metadata: `sessionHandlerType=Flow`,
+      `sessionHandlerFlow=Chess_Coach_Routing_v2`. Messaging Settings → channel → Edit.
+- [x] **Agent Context** → Messaging Session → Edit Included Fields → 5 `*__c` fields selected.
+- [x] `.agent`: the 5 Chess_* vars are `linked string` + `source: @MessagingSession.Chess_FEN__c` (etc.).
+      Validated, published, active.
+- [x] FLS read (+ editable) on the 5 fields, granted to BOTH the agent user and the admin/building
+      user (see gotcha 2) via the Chess_Coach_Actions perm set.
+- [x] **Pre-Chat ACTIVE on the ESD + the 5 fields in Hidden Pre-Chat Fields → Selected + deployment
+      republished** (see gotcha 0 — THE root cause).
+- [x] E2E PROVEN: open chat mid-game → coach reasons about the live position without being asked for
+      a FEN. ✅ Live 2026-06-23.
 
 ### Minimal Omni-Flow shape
 ```
@@ -121,7 +140,7 @@ them once the flow is active.
    → Update Records: MessagingSession {!$Record.Id}
         Chess_FEN__c={!Chess_FEN}  Chess_PGN__c={!Chess_PGN}  Chess_Turn__c={!Chess_Turn}
         Chess_Move_Count__c={!Chess_Move_Count}  Chess_Status__c={!Chess_Status}
-   → Route Work: Routing Type=Bot, Bot=Chess Coach
+   → Route Work: Route To = Agentforce Service Agent = Chess Coach  (clone the stock flow — see gotcha 1)
 ```
 
 ## Mobile exception

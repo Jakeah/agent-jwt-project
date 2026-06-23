@@ -993,3 +993,27 @@ ASK SLACKBOT: with a MIAW Custom Parameter + Parameter Mapping whose metadata sh
 input still arrives null at runtime (proven via Debug that the flow writes correctly when given a
 value). What makes the hidden-prechat Custom Parameter actually populate the flow's input variable?
 Is a flow reference required on the mapping? Does the client need to send it a specific way?
+
+## 2026-06-23 — RESOLVED: game context live end-to-end. Root cause = Pre-Chat inactive on the ESD.
+
+The dead hop was NOT the Parameter Mapping (Slackbot's `<flowVariableName>` theory was wrong — see
+below). The actual cause was upstream of everything we'd been debugging: **Pre-Chat was not ACTIVE on
+the Embedded Service Deployment.** With pre-chat inactive, SCRT2 silently DROPS all hidden prechat
+fields at the front door — the client's `setHiddenPrechatFields(...)` values are accepted by the
+widget but never forwarded into the conversation, so the flow's input vars arrive null. Every
+downstream layer (param mappings, flow input vars, Update Records, FLS, agent linked vars) was correct
+the whole time; we just couldn't see any value flow because nothing was let through.
+
+Fix: Setup → Embedded Service Deployment → enable/activate **Pre-Chat**, confirm the 5 `Chess_*`
+fields are in **Hidden Pre-Chat Fields → Selected**, then **Publish the deployment** (ESD changes are
+invisible to the live site until republished), then hard-refresh (cached bootstrap). Verified live: the
+coach reasons about the actual on-screen FEN without being asked for one.
+
+DEAD END (Slackbot was wrong): Slackbot claimed the mapping needed a `<flowVariableName>` child element
+inside `<actionParameterMappings>`. Deploy FAILED — `Element flowVariableName invalid at this location
+in type MessagingChannelActionParameterMapping`. The schema allows ONLY `<actionParameterName>`. The
+binding is **by matching name**: `<actionParameterName>Chess_FEN</actionParameterName>` binds to the
+flow input variable literally named `Chess_FEN`. There is no separate flow-variable element. Reverted.
+
+Bonus: the MessagingChannel + Chess_Coach_Routing_v2 flow now retrieve cleanly (the earlier status-1
+retrieve failed only because the active flow didn't exist yet) — both vendored into source now.

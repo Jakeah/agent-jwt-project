@@ -13,6 +13,9 @@
         <type>HelpResponse</type>
     </automatedResponses>
     <customParameters>
+        <actionParameterMappings>
+            <actionParameterName>Chess_FEN</actionParameterName>
+        </actionParameterMappings>
         <externalParameterName>Chess_FEN</externalParameterName>
         <masterLabel>Chess_FEN</masterLabel>
         <maxLength>255</maxLength>
@@ -20,6 +23,9 @@
         <parameterDataType>String</parameterDataType>
     </customParameters>
     <customParameters>
+        <actionParameterMappings>
+            <actionParameterName>Chess_Move_Count</actionParameterName>
+        </actionParameterMappings>
         <externalParameterName>Chess_Move_Count</externalParameterName>
         <masterLabel>Chess_Move_Count</masterLabel>
         <maxLength>255</maxLength>
@@ -27,6 +33,9 @@
         <parameterDataType>String</parameterDataType>
     </customParameters>
     <customParameters>
+        <actionParameterMappings>
+            <actionParameterName>Chess_PGN</actionParameterName>
+        </actionParameterMappings>
         <externalParameterName>Chess_PGN</externalParameterName>
         <masterLabel>Chess_PGN</masterLabel>
         <maxLength>255</maxLength>
@@ -34,6 +43,9 @@
         <parameterDataType>String</parameterDataType>
     </customParameters>
     <customParameters>
+        <actionParameterMappings>
+            <actionParameterName>Chess_Status</actionParameterName>
+        </actionParameterMappings>
         <externalParameterName>Chess_Status</externalParameterName>
         <masterLabel>Chess_Status</masterLabel>
         <maxLength>255</maxLength>
@@ -41,6 +53,9 @@
         <parameterDataType>String</parameterDataType>
     </customParameters>
     <customParameters>
+        <actionParameterMappings>
+            <actionParameterName>Chess_Turn</actionParameterName>
+        </actionParameterMappings>
         <externalParameterName>Chess_Turn</externalParameterName>
         <masterLabel>Chess_Turn</masterLabel>
         <maxLength>255</maxLength>
@@ -64,7 +79,7 @@
         <keywordType>Help</keywordType>
         <language>en_US</language>
     </messagingKeywords>
-    <sessionHandlerAsa>Chess_Coach</sessionHandlerAsa>
+    <sessionHandlerFlow>Chess_Coach_Routing_v2</sessionHandlerFlow>
     <sessionHandlerQueue>Default_Queue_Agentforce_Contact_Center</sessionHandlerQueue>
-    <sessionHandlerType>AgentforceServiceAgent</sessionHandlerType>
+    <sessionHandlerType>Flow</sessionHandlerType>
 </MessagingChannel>
