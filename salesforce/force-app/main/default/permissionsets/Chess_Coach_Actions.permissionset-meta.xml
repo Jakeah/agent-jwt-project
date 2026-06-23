@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Chess Coach Actions</label>
+    <description>Apex class access for the Chess Coach agent's actions (player-name lookup + engine-grounded analysis via the chess REST facade). Assigned to the Einstein Agent User.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <classAccesses>
+        <apexClass>ChessCoachGetPlayerName</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ChessCoachClient</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ChessCoachAnalyzePosition</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ChessCoachBestMove</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ChessCoachJudgeMove</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>ChessCoachNameOpening</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <!-- Access to the external credential principal behind the ChessCoachApi Named Credential,
+         so the agent user's Apex callouts can authenticate to the chess REST facade. -->
+    <externalCredentialPrincipalAccesses>
+        <externalCredentialPrincipal>ChessMCP-MCPAuthentication</externalCredentialPrincipal>
+        <enabled>true</enabled>
+    </externalCredentialPrincipalAccesses>
+    <!-- Read on UserExternalCredential is required at callout time to resolve the principal. -->
+    <objectPermissions>
+        <object>UserExternalCredential</object>
+        <allowRead>true</allowRead>
+        <allowCreate>false</allowCreate>
+        <allowEdit>false</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>false</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
+</PermissionSet>

@@ -80,29 +80,30 @@ start_agent coach:
               Use the moves and position above to coach the player. Explain ideas, suggest plans,
               point out tactical and strategic themes, and name the opening when you recognize it.
               Be encouraging and specific. Offer one clear idea at a time rather than overwhelming the player.
-              Be honest that your evaluations are estimates from your own chess knowledge.
+              Ground every concrete claim about the position in the engine tools — use analyze_position
+              for an evaluation and best continuation, get_best_move when the player asks what to play,
+              judge_move when they ask whether a specific move was good, and identify_opening to name
+              the opening. Pass the current FEN (Chess_FEN) to the position tools. Report what the
+              engine returns in plain, motivating language — do NOT invent evaluations.
+              If the player tells you a move or position that differs from Chess_FEN, use what they
+              gave you so your coaching tracks the live game even as it moves on.
               Do NOT use the show_command tool. Always compose your response as direct text.
-              # NOTE: engine-grounded MCP tools (analyze_position / get_best_move / judge_move /
-              # identify_opening) are authored below but disabled pending the MCP tool-target
-              # binding (Beta). Re-enable the commented references + definitions once they resolve.
 
         actions:
             go_to_off_topic: @utils.transition to @subagent.off_topic
             go_to_ambiguous_question: @utils.transition to @subagent.ambiguous_question
-            # --- chess MCP coaching tools (disabled pending MCP target-ID binding) ---
-            # analyze_position: @actions.analyze_position
-            #     description: "Evaluate a chess position (FEN)."
-            #     with fen = ...
-            # get_best_move: @actions.get_best_move
-            #     description: "Get the engine's best move for a position (FEN)."
-            #     with fen = ...
-            # judge_move: @actions.judge_move
-            #     description: "Judge a move the player asks about."
-            #     with fen = ...
-            #     with move = ...
-            # identify_opening: @actions.identify_opening
-            #     description: "Name the chess opening from a list of moves in SAN."
-            #     with moves = ...
+            # --- engine-grounded coaching tools (Apex → chess REST facade → Stockfish on Heroku) ---
+            # Inputs are left unbound so the planner fills them from context: pass Chess_FEN when it
+            # is set, otherwise the FEN/moves the player gives in chat. (Binding fen to the variable
+            # forced an empty value whenever Chess_FEN was blank.)
+            analyze_position: @actions.analyze_position
+                description: "Evaluate a position. Pass the current FEN — use the Chess_FEN variable when it is set, otherwise the position the player describes."
+            get_best_move: @actions.get_best_move
+                description: "Get the engine's best move. Pass the current FEN (Chess_FEN if set, else what the player gives)."
+            judge_move: @actions.judge_move
+                description: "Judge whether a move the player asks about was good. Pass the FEN of the position BEFORE the move and the move in SAN or UCI."
+            identify_opening: @actions.identify_opening
+                description: "Name the opening. Pass the moves played in SAN (from Chess_PGN if set, else what the player lists)."
 
     # Action definitions — backing logic + I/O. Referenced above and in before_reasoning.
     actions:
@@ -116,35 +117,56 @@ start_agent coach:
                 firstName: string
                     description: "Player's first name"
                     is_displayable: False
-        # --- chess MCP tool definitions (disabled pending MCP target-ID binding in this Beta org) ---
-        # Re-enable by uncommenting these + the references above once McpServerToolDefinition
-        # records resolve. Target format compiles as mcpTool://ChessMCP/<toolName>.
-        # analyze_position:
-        #     description: "Evaluate a chess position (FEN). Returns the engine evaluation and best continuation."
-        #     target: "mcpTool://ChessMCP/analyze_fen"
-        #     inputs:
-        #         fen: string
-        #             description: "Position in Forsyth-Edwards Notation"
-        # get_best_move:
-        #     description: "Get the engine's best move for a position (FEN)."
-        #     target: "mcpTool://ChessMCP/best_move"
-        #     inputs:
-        #         fen: string
-        #             description: "Position in FEN"
-        # judge_move:
-        #     description: "Judge a move played from a position vs. the engine's best."
-        #     target: "mcpTool://ChessMCP/explain_move"
-        #     inputs:
-        #         fen: string
-        #             description: "Position BEFORE the move, in FEN"
-        #         move: string
-        #             description: "The move played, in SAN or UCI"
-        # identify_opening:
-        #     description: "Name the chess opening from a list of moves in SAN."
-        #     target: "mcpTool://ChessMCP/name_opening"
-        #     inputs:
-        #         moves: list[string]
-        #             description: "Moves in SAN order"
+        # --- engine-grounded coaching tools ---
+        # Backed by Apex invocable classes that call the chess coaching REST facade (Stockfish on
+        # Heroku) via the ChessCoachApi Named Credential. This is the supported path while the
+        # native mcpTool:// agent-action binding is blocked in Beta — same engine, HTTP callout.
+        analyze_position:
+            description: "Evaluate a chess position (FEN). Returns the engine evaluation and best continuation."
+            target: "apex://ChessCoachAnalyzePosition"
+            inputs:
+                fen: string
+                    description: "Position in Forsyth-Edwards Notation"
+            outputs:
+                evaluation: string
+                    description: "Human-readable evaluation, White's perspective"
+                bestMove: string
+                    description: "Engine's best move in SAN"
+                principalVariation: string
+                    description: "The best line the engine sees"
+        get_best_move:
+            description: "Get the engine's best move for a position (FEN)."
+            target: "apex://ChessCoachBestMove"
+            inputs:
+                fen: string
+                    description: "Position in FEN"
+            outputs:
+                bestMove: string
+                    description: "Engine's best move in SAN"
+        judge_move:
+            description: "Judge a move played from a position vs. the engine's best."
+            target: "apex://ChessCoachJudgeMove"
+            inputs:
+                fen: string
+                    description: "Position BEFORE the move, in FEN"
+                move: string
+                    description: "The move played, in SAN or UCI"
+            outputs:
+                verdict: string
+                    description: "best / good / inaccuracy / mistake / blunder"
+                evalSwingCp: string
+                    description: "Centipawns lost by the move (higher = worse)"
+                engineBestMove: string
+                    description: "What the engine preferred, in SAN"
+        identify_opening:
+            description: "Name the chess opening from a sequence of moves in SAN."
+            target: "apex://ChessCoachNameOpening"
+            inputs:
+                moves: string
+                    description: "Moves in SAN order, space-separated"
+            outputs:
+                opening: string
+                    description: "Recognized opening name"
 
 subagent off_topic:
     label: "Off Topic"
