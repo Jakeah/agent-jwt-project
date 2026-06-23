@@ -672,3 +672,61 @@ widget verification-aware (button gates on token). Only the org pref remains.
 
 **Remaining project work after verification confirms:** Phase 7 docs — `docs/architecture-and-build.md`
 (Mermaid auth-flow + SOMA/MOMA + gotchas incl. the x5c lesson) + separate `docs/demo-script.md`.
+
+## 2026-06-23 — Agent fully operational: engine-grounded coaching live (Apex → REST facade)
+
+Decoupled from the (still-blocked) verification work: got the coach calling real Stockfish for
+any visitor — verified or guest. The native mcpTool:// binding is STILL blocked (McpServerDefinition
+exists at API v64+ but exposes only DeveloperName/Language/MasterLabel/Description as createable;
+0 tool records persist — same Beta wall). So we reached the same MCP server via supported tech.
+
+### chess-mcp: added a plain JSON REST facade (committed + deployed to chess-mcp-coach)
+- Refactored the 4 tool bodies into `src/tools.js` (single implementation). Both transports are
+  thin wrappers: `src/server.js` (MCP) and new `src/rest.js` (REST). No logic duplication.
+- New endpoints (POST JSON): /api/analyze, /api/best-move, /api/explain-move, /api/name-opening.
+  Illegal input → 400. Tests: new rest.test.mjs + existing MCP tests both green (10/10).
+- Deployed via `git subtree push --prefix chess-mcp heroku-mcp main` — **needs interactive
+  heroku auth** (token/netrc push failed non-interactively; user ran it). Live + verified:
+  /api/analyze returns real eval/PV, /api/name-opening → "Ruy López (Spanish Opening)".
+
+### Salesforce: 4 Apex invocable actions → ChessCoachApi Named Credential → REST facade
+- `ChessCoachClient` (shared HTTP callout) + 4 invocable classes (Apex allows ONE
+  @InvocableMethod per class, so they're split): ChessCoachAnalyzePosition / ChessCoachBestMove /
+  ChessCoachJudgeMove / ChessCoachNameOpening. Test class ChessCoachAnalysisTest (HttpCalloutMock,
+  5 passing).
+- New Named Credential **ChessCoachApi** → base URL `https://chess-mcp-coach-...herokuapp.com`
+  (reuses the existing ChessMCP ExternalCredential / NoAuthentication). Left the original ChessMCP
+  NC (→/mcp) untouched for the future native binding.
+- Agent: replaced the 4 commented mcpTool:// placeholders with live `apex://` action defs
+  (analyze_position/get_best_move/judge_move/identify_opening) + reasoning references. Instructions
+  now say to ground claims in the engine and use the FEN the player gives.
+
+### GOTCHAS hit + fixed (all real, all in the new Chess_Coach_Actions permission set)
+1. **Apex annotation:** `description='...engine''s...'` (doubled-quote apostrophe) → "Unexpected
+   token". Removed the apostrophes.
+2. **One @InvocableMethod per class** — can't put 4 in one class. Split into 4 classes.
+3. **Agent output param type:** judge_move's evalSwingCp as Apex `Decimal` → preview start failed
+   ("update data type to object / lightning__numberType"). Simplest fix: return it as String
+   (coach just relays it). 
+4. **Rigid input binding:** `with fen = @variables.Chess_FEN` forced fen="" whenever Chess_FEN was
+   blank (true in preview — no MessagingSession). Trace showed FunctionStep input {"fen":""} →
+   REQUIRED_FIELD_MISSING. Fix: leave inputs UNBOUND so the planner fills them from context.
+5. **Permissions (the big one — trace `runtime_withheld_actions` with filter_reasons):**
+   - `NO_USER_ACCESS` on all Apex classes (incl. the previously-shipped get_player_name, which
+     had simply never been invoked) → `classAccesses` for all five.
+   - CalloutException "couldn't access credential ChessMCP" → `externalCredentialPrincipalAccesses`
+     for principal **ChessMCP-MCPAuthentication** (format: `<ExternalCred>-<ParameterGroup>`).
+   - "no read on User External Credential object" → `objectPermissions` read on
+     **UserExternalCredential**.
+   Permission set assigned to the Einstein Agent User chesscoach.agent@chess-agent.demo.
+- **Diagnosis method:** session trace at `.sfdx/agents/Chess_Coach/sessions/<id>/traces/*.json` —
+  EnabledToolsStep (`runtime_withheld_actions`) and FunctionStep (`input` + `errors`) were the
+  ground truth that pinpointed each gap. The user-facing "technical issue" message was useless;
+  the trace named the exact cause every time.
+
+### VERIFIED in live preview (--use-live-actions) + PUBLISHED + ACTIVATED
+- "best move for Black + eval" (Ruy López FEN) → **a6, +0.32, real PV** (engine, not LLM).
+- "was 2...f6 good?" → correctly judged risky (Qh5/d4 ideas).
+- "what opening is e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6?" → Ruy López.
+- The coach is now fully operational for ANY visitor (guest or verified). Verified-identity
+  greeting-by-name still pends the org User-Verification preference (PM request out) — independent.
