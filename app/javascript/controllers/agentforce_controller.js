@@ -31,16 +31,23 @@ export default class extends Controller {
     // Bind once so add/removeEventListener see the same references.
     this.onReady = this.handleReady.bind(this);
     this.onTokenExpired = this.handleTokenExpired.bind(this);
+    this.onGameStateChanged = this.seedGameContext.bind(this);
 
     window.addEventListener("onEmbeddedMessagingReady", this.onReady);
     window.addEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
+    // Re-seed hidden prechat fields whenever the board changes, so a chat opened mid-game starts
+    // with the live position (MIAW captures these at conversation start). Guarded by isReady so we
+    // don't call the prechat API before the widget exists.
+    window.addEventListener("chess:state-changed", this.onGameStateChanged);
 
+    this.isReady = false;
     this.loadBootstrap();
   }
 
   disconnect() {
     window.removeEventListener("onEmbeddedMessagingReady", this.onReady);
     window.removeEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
+    window.removeEventListener("chess:state-changed", this.onGameStateChanged);
   }
 
   // --- 1. Inject the MIAW bootstrap script (idempotent across Turbo navigations) ---
@@ -73,6 +80,7 @@ export default class extends Controller {
 
   // --- 2. Widget ready → verify the user, then seed the game context ---
   async handleReady() {
+    this.isReady = true;
     await this.setIdentityToken();
     this.seedGameContext();
   }
@@ -100,8 +108,9 @@ export default class extends Controller {
   // Push the current board into hidden prechat fields → conversation variables the coach reads.
   // Must run after ready and before the conversation begins.
   seedGameContext() {
+    if (!this.isReady) return; // widget not up yet; handleReady will seed once it is
     try {
-      const api = window.embeddedservice_bootstrap.prechatAPI;
+      const api = window.embeddedservice_bootstrap?.prechatAPI;
       if (api && typeof api.setHiddenPrechatFields === "function") {
         api.setHiddenPrechatFields(gameStateForPrechat());
       }

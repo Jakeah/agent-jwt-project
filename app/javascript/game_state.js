@@ -18,7 +18,13 @@ const state = {
 
 export function updateGameState(patch) {
   Object.assign(state, patch);
-  if (typeof window !== "undefined") window.__chessGameState = { ...state };
+  if (typeof window !== "undefined") {
+    window.__chessGameState = { ...state };
+    // Notify listeners (the agentforce controller) so they can re-seed the chat's hidden prechat
+    // fields with the current board. MIAW captures those fields at conversation start, so keeping
+    // them current means a chat opened mid-game starts with the live position, not page-load.
+    window.dispatchEvent(new CustomEvent("chess:state-changed", { detail: { ...state } }));
+  }
   return state;
 }
 
