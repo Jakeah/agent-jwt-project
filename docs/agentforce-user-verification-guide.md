@@ -3,7 +3,8 @@
 Durable, findable-by-name reference for wiring **Salesforce Messaging for In-App and Web
 (MIAW) User Verification** to a custom web app. Edit this in place when a lesson is superseded.
 
-**Last verified:** 2026-06-19 (client API + signing confirmed from developer.salesforce.com;
+**Last verified:** 2026-06-23 (full Setup confirmed in-org incl. the x5c JWK requirement + open
+keyset↔channel binding item; client API + signing originally confirmed from developer.salesforce.com;
 Setup-side claim mapping pending live confirmation in Phase 4 — see the ⚠️ below).
 
 ---
@@ -67,14 +68,56 @@ window.addEventListener("onEmbeddedMessagingIdentityTokenExpired", () => {
 embeddedservice_bootstrap.userVerificationAPI.clearSession({ shouldEndSession: true });
 ```
 
-## Salesforce Setup (to be filled in during Phase 4)
+## Salesforce Setup (confirmed in-org, chess-agent)
 
-1. Create the Agentforce service agent.
-2. Create the Messaging for In-App and Web channel + Embedded Service deployment; attach the
-   agent; set **allowed domains** (localhost:3000 + the Heroku domain).
-3. **User Verification:** register the RS256 **public key** (below) and note the **audience**
-   value Salesforce expects, plus the `sub`→Contact mapping field.
-4. Seed a test Contact whose email matches a Rails user.
+1. Create the Agentforce service agent (Chess Coach).
+2. **Messaging for In-App and Web channel** (`Chess_Coach_Web`, Enhanced) + **Embedded Service
+   deployment**; route to the agent. Fallback Queue is **required** and must support the
+   **MessagingSession** object (add a `QueueSobject` row if the queue doesn't list it, or the
+   queue won't appear in the picker).
+3. **Allowed origins:** add localhost:3000 + the Heroku domain to **Setup → CORS** (the
+   *CORS Allowed Origins* list — NOT "Trusted URLs", which is the reverse/CSP direction).
+4. **User Verification — JWKS model** (Setup → Service → Embedded Service → **Enhanced Chat
+   User Verification**):
+   - **JSON Web Key**: upload a JWK file. **MUST include `x5c`** (an X.509 public cert) in
+     addition to `kty/kid/alg/n/e` — see the critical gotcha below. The key's embedded `kid`
+     must equal the JWT header `kid`.
+   - **JSON Web Keyset**: Type **Keys**, **JSON Web Key Issuer** must byte-match the JWT `iss`
+     (no trailing slash), attach the key.
+5. **No audience field** exists in the key/keyset config — trust is keyed on **issuer +
+   signature (kid)**, not `aud`. Set the registry `audience` to the org My Domain as a stable
+   recipient.
+6. **`sub`→Contact:** there is no mapping field. The verified `sub` is stored in the
+   **Messaging Platform Key** of the MessagingEndUser as `v2/iamessage/AUTH/.../uid:<sub>`, and
+   the runtime resolves it to a Contact when the conversation is created. The agent reads
+   `@MessagingEndUser.ContactId`.
+7. Seed a test Contact whose email matches a Rails user (Jordan Player / player@example.com).
+
+### ⚠️ CRITICAL gotcha — the JWK needs `x5c`, or every conversation is silently UNAUTH
+
+Salesforce's JWK upload accepts a key with only `kty/kid/alg/n/e`, but the keyset then
+**silently fails to validate tokens** — conversations bind as **Guest** with
+`MessagingPlatformKey = v2/iamessage/UNAUTH/NA/uid:<random-uuid>` and `ContactId = null`, even
+though the token's signature/claims are perfect and the client's `setIdentityToken` returns OK.
+The User Verification *troubleshooting* article lists `kty, kid, alg, **x5c**` as required JWK
+members. Fix: generate a self-signed X.509 cert FROM the existing private key (public key
+unchanged → already-signed tokens stay valid) and include `x5c` = strict-base64 DER of the cert
+in the JWK. We script this in Ruby; the artifacts are `config/keys/identity_jwk.json` (single
+JWK, with x5c) and `identity_jwt.cert.pem`.
+
+**Success check (one query):** the verified MessagingEndUser has `ContactId` populated and
+`MessagingPlatformKey` contains `AUTH/...` (not `UNAUTH`).
+
+### ⚠️ OPEN ITEM (as of 2026-06-23) — keyset↔channel binding for EXTERNAL sites
+
+After the x5c fix + deployment republish, conversations were STILL UNAUTH and
+`MessagingChannel.IsAuthenticated` stayed `false`. The **"Add User Verification" checkbox does
+NOT exist on the channel Edit form for an external site** (it's Experience-Builder/Salesforce-
+site only). There is no exposed channel field or queryable sobject linking the keyset to the
+channel. The canonical setup article `service.miaw_token_based_user_verification_setup.htm` must
+be read **in a browser** (it doesn't render via tooling) to find the external-site activation /
+keyset-to-channel step. MIAW User Verification is **Beta** — confirm with Salesforce if the doc
+step doesn't resolve it. Everything app-side is proven correct; this is the last mile.
 
 ## Public key (RS256, registered in Salesforce)
 

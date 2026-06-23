@@ -587,3 +587,56 @@ App live at https://chess-agent-jwt-95c105a581a5.herokuapp.com (web + worker dyn
 → Phase 6 DONE. NEXT: E2E (sign in on live URL → open chat → confirm session trace shows
   VERIFIED + bound to Jordan Player's Contact + game context reached the agent; contrast anon)
   then Phase 7 docs. ⚠️ aud is the one value to confirm empirically in the E2E session trace.
+
+## 2026-06-23 — E2E verification: deep debug. App side PROVEN; one platform-side binding unresolved
+
+Ran live E2E as player@example.com on the Heroku app. Symptom: chat works but the agent
+treats the user as anonymous (no name, no game context). Root cause is NOT our code — every
+conversation binds as **Guest / UNAUTH** server-side despite a valid token. Full diagnosis:
+
+### PROVEN CORRECT (ruled out as causes, with evidence)
+- **JWT mint:** live Heroku-signed token fetched via curl; `JWT.decode` against
+  config/keys/identity_jwt.public.pem → **signature VALID**. Claims correct: header
+  {kid:chess-identity-key-1, alg:RS256}; payload iss=<heroku app, no trailing slash>,
+  sub=player@example.com, aud=<org My Domain>, ttl 300s.
+- **/identity_token endpoint:** 200 OK authenticated, 302→sign_in anonymous (trust boundary
+  holds). Confirmed in browser Network tab.
+- **Client apply:** console `userVerificationAPI.setIdentityToken(...)` → returns OK, no error.
+  `userVerificationAPI` present (boot:object, uv:object, setter:function, prechat:function).
+- **Keypair integrity:** cert pubkey md5 == public.pem md5 == JWK n/e — all the same public key.
+- **Widget IS verification-aware:** after the x5c fix + republish, the **chat button only renders
+  after a token is applied** (matches docs: "conversation button rendered after the API receives
+  a valid identity token"). Before, a guest button always showed.
+
+### THE x5c FIX (real, necessary — committed 3b79df1)
+- **Salesforce JWK requires an `x5c` member** (kty/kid/alg/**x5c**), per the User Verification
+  troubleshooting doc. Our original identity_jwk.json had only kty/kid/alg/use/n/e → the keyset
+  silently couldn't validate tokens. Generated a self-signed X.509 cert FROM the existing private
+  key (public key unchanged → existing tokens stay valid; 10yr validity; 2048-bit), rebuilt the
+  JWK with x5c = strict-base64 DER of the cert. Re-uploaded key + recreated keyset in Setup.
+  This is what made the widget start gating the button on a token (progress!).
+
+### STILL UNRESOLVED — platform-side keyset↔conversation binding
+- After x5c re-upload AND deployment republish AND clean incognito test, the MessagingEndUser is
+  STILL `name='Guest'`, `ContactId=null`, MessagingPlatformKey `v2/iamessage/UNAUTH/NA/uid:<uuid>`.
+  A verified user would read `AUTH/...uid:player@example.com` (per the overview doc).
+- `MessagingChannel.Chess_Coach_Web.IsAuthenticated = false` and won't change via Setup:
+  - **No "Add User Verification" option exists on the channel Edit form** (confirmed twice; that
+    checkbox is Experience-Builder/Salesforce-site only — we're an EXTERNAL site).
+  - No keyset/certificate/verification field on MessagingChannel (full describe done).
+  - No queryable binding sobject (MessagingChannelUserVerification etc. all absent).
+- Doc gap: `service.miaw_token_based_user_verification_setup.htm` (the canonical "Set Up
+  Token-Based User Verification" steps) will NOT render via the doc tooling (persistent shell/
+  CSS-error) — couldn't get the authoritative external-site channel-binding step.
+- Did NOT blind-write IsAuthenticated=true (shared-org config; auto-mode classifier correctly
+  blocked it, and it likely isn't the real mechanism anyway).
+
+### CONCLUSION / HANDOFF
+Everything in this repo's control is correct and proven. The remaining failure is a Salesforce
+**platform-side association between the JSON Web Keyset and the messaging channel/deployment**
+that has no exposed config surface we could find and no renderable setup doc. This is a
+"confirm with Salesforce (MIAW User Verification is Beta) / read the official setup article in a
+browser" item, NOT an app bug.
+**To resume:** open `service.miaw_token_based_user_verification_setup.htm` in a browser and find
+the step that ties the keyset to the channel (or the external-site activation step). The success
+check is one query: MessagingEndUser.ContactId populated + platformKey contains `AUTH/...`.
