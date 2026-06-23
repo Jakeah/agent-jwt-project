@@ -871,3 +871,26 @@ REMAINING (all Setup UI — see guide checklist; metadata-authoring a routing fl
    writing Chess_*__c → Route Work (Bot = Chess Coach). Activate.
 3. Channel Routing Type → Omni-Flow, select the flow.
 4. Agent Builder → Context → Messaging Session → Edit Included Fields → select the 5 Chess_*__c.
+
+## 2026-06-23 — Omni routing flow BUILT as metadata (not UI); 3 channel-config steps remain
+
+Pushed past "this needs the UI" — most of it was metadata-authorable after all:
+- ✅ **Chess_Coach_Routing** RoutingFlow authored + deployed **Active** (activeVersion
+  301g800000PbgFMAAZ). Structure: recordId + 5 Text input vars → **Update Records** on
+  MessagingSession (filter Id=recordId) writing Chess_*__c → **routeWork** action (routingType=Bot,
+  serviceChannelId=0N9g8000000ytHlCAI [sfdc_livemessage], botId=0Xxg8000000mw8DCAQ [Chess Coach]).
+- **Method:** iterated with `sf project deploy start --dry-run` to learn requirements (it taught
+  me: needs a `recordId` Text input var; active deploy additionally requires serviceChannelId +
+  labels, not just devName). routeWork is the right action; forwardToBotOrAgent is for SMS/WhatsApp
+  outbound (red herring). Real IDs pulled from ServiceChannel + BotDefinition queries.
+- ✅ MessagingSession custom fields + FLS + agent var bindings (@MessagingSession.Chess_*__c,
+  publishes) — all done earlier.
+
+**REMAINING — 3 channel-config steps that ARE UI-only (element names not safely guessable; picker
+handles IDs):**
+1. Channel Routing Type → **Omni-Flow** → select Chess_Coach_Routing (replaces direct-to-agent;
+   sessionHandlerType currently AgentforceServiceAgent). Messaging Settings → channel → Edit.
+2. **Parameter Mappings** (×5): Custom Parameter Chess_* → Flow Variable Chess_* (case-exact).
+   These activate the param→flow-input injection; inert until the flow is attached.
+3. Agent Builder → Context → Messaging Session → **Edit Included Fields** → select 5 Chess_*__c.
+Then E2E: mid-game chat → coach knows the position without being asked.

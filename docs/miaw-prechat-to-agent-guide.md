@@ -67,7 +67,12 @@ to the old shortcut. So this is an additive change, not a re-architecture. Param
 - [ ] **Parameter Mappings** — NOT yet created (we deferred them). Messaging Settings → channel →
       Parameter Mappings → for each: Parameter `Chess_FEN` → **Flow Variable Name** `Chess_FEN`
       (case-exact). Repeat for all 5.
-- [ ] **Omni-Flow** (Flow Builder UI — raw-metadata authoring is high-risk for routing flows):
+- [x] **Omni-Flow** — `Chess_Coach_Routing` (RoutingFlow, Active) AUTHORED AS METADATA + deployed.
+      Update Records → MessagingSession.Chess_*__c (filter Id = recordId) → routeWork (routingType
+      Bot, serviceChannelId 0N9g8000000ytHlCAI / sfdc_livemessage, botId 0Xxg8000000mw8DCAQ Chess
+      Coach). force-app/main/default/flows/Chess_Coach_Routing.flow-meta.xml. (Originally thought
+      UI-only — it's metadata-authorable; iterated via --dry-run then active deploy.)
+- [ ] ~~Omni-Flow (UI)~~ superseded by the metadata flow above; remaining flow detail:
       - New Flow → **Omni-Channel Flow** (a.k.a. routing flow; `$Record` = MessagingSession).
       - **5 input variables** (Text, *Available for input*): `Chess_FEN`, `Chess_PGN`, `Chess_Turn`,
         `Chess_Move_Count`, `Chess_Status` — names case-exact to the Parameter Mappings.
