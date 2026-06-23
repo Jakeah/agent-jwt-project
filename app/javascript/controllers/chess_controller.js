@@ -3,6 +3,30 @@ import { Chess } from "chess.js";
 import { Engine } from "engine";
 import { updateGameState } from "game_state";
 
+// Full piece names, for spelling a move out loud ("Knight to f3").
+const PIECE_NAMES = { k: "King", q: "Queen", r: "Rook", b: "Bishop", n: "Knight", p: "Pawn" };
+
+// Turn a chess.js verbose move into how a player would say it aloud — the learning aid in the
+// left panel. Handles captures, castling, en passant, promotion, check and checkmate.
+function spokenMove(move) {
+  if (!move) return "";
+  if (move.flags.includes("k")) return withSuffix("Castles kingside", move);
+  if (move.flags.includes("q")) return withSuffix("Castles queenside", move);
+
+  const piece = PIECE_NAMES[move.piece];
+  const verb = move.flags.includes("c") || move.flags.includes("e") ? "takes" : "to";
+  let phrase = `${piece} ${verb} ${move.to}`;
+  if (move.flags.includes("e")) phrase += " en passant";
+  if (move.promotion) phrase += `, promotes to ${PIECE_NAMES[move.promotion]}`;
+  return withSuffix(phrase, move);
+}
+
+function withSuffix(phrase, move) {
+  if (move.san.endsWith("#")) return `${phrase} — checkmate`;
+  if (move.san.endsWith("+")) return `${phrase} — check`;
+  return phrase;
+}
+
 // Renders an interactive chess board, plays the user (White) against Stockfish (Black),
 // shows a live eval bar + best-move hint, and persists each move to the Rails game.
 //
@@ -17,10 +41,14 @@ export default class extends Controller {
     depth: { type: Number, default: 12 },
   };
 
-  static PIECES = {
-    wK: "♔", wQ: "♕", wR: "♖", wB: "♗", wN: "♘", wP: "♙",
-    bK: "♚", bQ: "♛", bR: "♜", bB: "♝", bN: "♞", bP: "♟",
-  };
+  // One uniform piece set: the SOLID (filled) glyphs for BOTH colors, so every piece is the same
+  // shape (the black-pawn style the user liked). White vs. Black is conveyed by fill color +
+  // outline in #render, not by switching to the thin outline glyphs (which are a different shape
+  // and were the cause of the "all different styles" look).
+  static PIECES = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+
+  // Track the most recent move (both colors) so the left panel can show its notation + spoken form.
+  lastMove = null;
 
   connect() {
     this.chess = new Chess(this.fenValue || undefined);
@@ -68,6 +96,7 @@ export default class extends Controller {
     this.selected = null;
     this.legalTargets = [];
     if (!move) return this.#render();
+    this.lastMove = move;
 
     this.#render();
     this.#persist();
@@ -78,7 +107,10 @@ export default class extends Controller {
     this.thinking = true;
     this.#setStatus("Computer is thinking…");
     this.engine.bestMove(this.chess.fen(), { depth: this.depthValue }).then((mv) => {
-      if (mv) this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+      if (mv) {
+        const reply = this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+        if (reply) this.lastMove = reply;
+      }
       this.thinking = false;
       this.#render();
       this.#persist();
@@ -149,33 +181,61 @@ export default class extends Controller {
   #render() {
     const board = this.chess.board(); // 8x8 from rank 8 → rank 1
     const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
-    let html = '<div class="grid grid-cols-8 w-fit border-2 border-slate-800 select-none">';
 
+    // Board: an 8x8 grid of squares, plus a left rank gutter (8→1) and a bottom file gutter (a→h)
+    // so the player can read coordinates while learning. The gutters are an extra row/column in a
+    // 9-col grid wrapping the squares.
+    let cells = "";
     board.forEach((row, r) => {
+      // Rank label on the left edge of each row.
+      cells += `<div class="flex items-center justify-center w-5 text-xs font-medium text-slate-400">${8 - r}</div>`;
       row.forEach((cell, c) => {
         const square = files[c] + (8 - r);
         const dark = (r + c) % 2 === 1;
         const isSel = this.selected === square;
         const isTarget = this.legalTargets.includes(square);
+        const isLast = this.lastMove && (this.lastMove.from === square || this.lastMove.to === square);
         const base = dark ? "bg-emerald-700" : "bg-emerald-100";
         const ring = isSel ? "ring-4 ring-inset ring-yellow-400" : "";
-        const glyph = cell ? this.constructor.PIECES[cell.color + cell.type.toUpperCase()] : "";
+        const lastRing = isLast && !isSel ? "ring-4 ring-inset ring-amber-300/70" : "";
+        const glyph = cell ? this.constructor.PIECES[cell.type] : "";
         const dot = isTarget && !cell ? '<span class="absolute w-3 h-3 rounded-full bg-yellow-500/70"></span>' : "";
         const capRing = isTarget && cell ? "ring-4 ring-inset ring-yellow-500/80" : "";
-        html += `
+        // Same solid glyph for both colors: White is filled white with a dark outline (text-stroke),
+        // Black is solid dark. This keeps every piece the identical shape.
+        const pieceClass = cell?.color === "w" ? "text-white chess-piece-white" : "text-slate-900";
+        cells += `
           <div data-action="click->chess#onSquareClick" data-square="${square}"
                class="relative w-14 h-14 md:w-16 md:h-16 flex items-center justify-center
-                      text-4xl cursor-pointer ${base} ${ring} ${capRing}">
-            ${dot}<span class="${cell?.color === "w" ? "text-white drop-shadow" : "text-slate-900"}">${glyph}</span>
+                      text-4xl cursor-pointer ${base} ${ring} ${lastRing} ${capRing}">
+            ${dot}<span class="${pieceClass}">${glyph}</span>
           </div>`;
       });
     });
+    // Bottom file gutter: an empty corner cell, then a..h under each column.
+    let fileGutter = '<div class="w-5"></div>';
+    files.forEach((f) => {
+      fileGutter += `<div class="w-14 md:w-16 text-center text-xs font-medium text-slate-400">${f}</div>`;
+    });
 
-    html += "</div>";
+    const boardHtml = `
+      <div class="select-none w-fit">
+        <div class="grid grid-cols-[1.25rem_repeat(8,minmax(0,1fr))] border-2 border-slate-800">
+          ${cells}
+        </div>
+        <div class="grid grid-cols-[1.25rem_repeat(8,minmax(0,1fr))] mt-1">
+          ${fileGutter}
+        </div>
+      </div>`;
+
+    // Left panel: the last move in large notation + how it's said aloud (a learning aid).
+    const movePanel = this.#movePanelHtml();
+
     this.element.innerHTML = `
       <div class="flex gap-6 items-start flex-wrap">
+        ${movePanel}
         <div>
-          ${html}
+          ${boardHtml}
           <p data-chess-status class="mt-3 text-sm text-slate-600">Your move (White).</p>
         </div>
         <div class="w-48">
@@ -187,6 +247,21 @@ export default class extends Controller {
           <p data-chess-evaltext class="text-sm text-slate-700">…</p>
           <p data-chess-besttext class="text-xs text-slate-500 mt-1"></p>
         </div>
+      </div>`;
+  }
+
+  // The left-hand "last move" card: big SAN code + the spoken form underneath.
+  #movePanelHtml() {
+    const m = this.lastMove;
+    const mover = m ? (m.color === "w" ? "White" : "Black") : "";
+    const code = m ? m.san : "—";
+    const spoken = m ? spokenMove(m) : "Make a move to begin";
+    return `
+      <div class="w-44 shrink-0">
+        <h3 class="font-semibold mb-2 text-sm uppercase tracking-wide text-slate-500">Last move</h3>
+        <p class="text-xs text-slate-400 mb-1">${mover}</p>
+        <p class="text-5xl font-bold tracking-tight text-slate-900 leading-none break-all">${code}</p>
+        <p class="mt-3 text-base text-slate-600">${spoken}</p>
       </div>`;
   }
 
