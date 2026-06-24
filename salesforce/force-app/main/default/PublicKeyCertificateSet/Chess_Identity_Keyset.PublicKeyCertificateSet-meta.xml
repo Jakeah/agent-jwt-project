@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PublicKeyCertificateSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <jwtIssuer>https://chess-agent-jwt-95c105a581a5.herokuapp.com</jwtIssuer>
+    <masterLabel>Chess_Identity_Keyset</masterLabel>
+    <publicKeyCertificateSetKeys>
+        <publicKeyCertificate>chess_identity_key_1</publicKeyCertificate>
+    </publicKeyCertificateSetKeys>
+    <type>JWKS</type>
+</PublicKeyCertificateSet>

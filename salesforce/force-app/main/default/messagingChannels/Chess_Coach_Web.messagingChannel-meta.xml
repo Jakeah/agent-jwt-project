@@ -62,6 +62,17 @@
         <name>Chess_Turn</name>
         <parameterDataType>String</parameterDataType>
     </customParameters>
+    <embeddedConfig>
+        <allowedFileTypes>bmp,csv,doc,docx,gif,jpg,pdf,png,tiff,txt,xls,xlsx,xml</allowedFileTypes>
+        <authMode>Auth</authMode>
+        <isAgentAvlCheckEnabled>false</isAgentAvlCheckEnabled>
+        <isAttachmentUploadEnabled>true</isAttachmentUploadEnabled>
+        <isEstimatedWaitTimeEnabled>false</isEstimatedWaitTimeEnabled>
+        <isFallbackMessageEnabled>false</isFallbackMessageEnabled>
+        <isSaveTranscriptEnabled>false</isSaveTranscriptEnabled>
+        <maxFileSize>5</maxFileSize>
+        <verifiedUserJwtExpirationTime>60</verifiedUserJwtExpirationTime>
+    </embeddedConfig>
     <masterLabel>Chess Coach Web</masterLabel>
     <messagingChannelType>EmbeddedMessaging</messagingChannelType>
     <messagingKeywords>

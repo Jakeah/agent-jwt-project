@@ -3,11 +3,13 @@
 Durable, findable-by-name reference for wiring **Salesforce Messaging for In-App and Web
 (MIAW) User Verification** to a custom web app. Edit this in place when a lesson is superseded.
 
-**Last verified:** 2026-06-24 (END-TO-END verified identity now WORKING — the last-mile
-keyset↔channel binding was resolved: the "Add User Verification" checkbox is hidden when you Edit
-a section from the channel detail page, but present via full Edit from the channels list view; see
-the RESOLVED note below. Also confirmed in-org: the x5c JWK requirement; client API + signing from
-developer.salesforce.com).
+**Last verified:** 2026-06-24 (IN PROGRESS — all STATIC config confirmed correct: "Add User
+Verification" enabled on the channel (`authMode=Auth`), keyset `jwtIssuer` byte-matches the JWT
+`iss`, cert active with x5c, and the registered public key's modulus matches Heroku's signing key.
+BUT conversations were still binding UNAUTH due to a CLIENT-side identity-token re-mint loop that
+froze the page / opened conversations before the token was set — guard shipped; awaiting a clean
+re-test to confirm AUTH binding. See the two ⚠️ notes below. Note the earlier "select the keyset on
+the channel" guidance was WRONG — corrected below.)
 
 ---
 
@@ -123,16 +125,45 @@ channel — and the **"Add User Verification" checkbox appeared to not exist** o
   checkbox. This is the path we kept taking — so the control looked entirely absent.
 - ✅ From the channel **list view** (Messaging Settings → the channels listing), use the **row
   Edit** action (full-record Edit). That renders the COMPLETE form, where **"Add User
-  Verification"** is present. Check it, select the JSON Web Keyset, save.
+  Verification"** is present. Check it, save.
 
 So the checkbox is NOT external-site-only / Experience-Builder-only as previously feared — it's
 there for the external-site channel too; the section-level edit on the detail page just doesn't
 show it. **Rule of thumb: if a Setup field you expect is missing, re-open the record via full
 Edit from the list view before concluding the feature doesn't exist.**
 
-**Verify:** after binding, a new conversation's MessagingEndUser has `ContactId` populated and
-`MessagingPlatformKey` contains `AUTH/...` (not `UNAUTH`); `MessagingChannel.IsAuthenticated` is
-`true`. End-to-end verified identity now works.
+> **CORRECTION (2026-06-24): there is NO "JSON Web Keyset" picker on the channel form.** An earlier
+> draft of this note said to "select the keyset" on the channel — that is wrong. The channel's
+> "Add User Verification" checkbox only turns verification ON (sets `authMode=Auth` +
+> `verifiedUserJwtExpirationTime` in the channel's `embeddedConfig`). The keyset is registered
+> SEPARATELY (`PublicKeyCertificateSet` + `PublicKeyCertificate` metadata) and is matched to the
+> token by **`jwtIssuer` == the JWT `iss`** — there is no channel→keyset reference field at all.
+
+### How the keyset is actually stored + verified (metadata, not a picker — confirmed 2026-06-24)
+The JWKS lives in two retrievable metadata types (NOT queryable as SObjects):
+- **`PublicKeyCertificateSet`** (`Chess_Identity_Keyset`): `<jwtIssuer>` MUST byte-match the JWT
+  `iss` (no trailing slash); `<type>JWKS</type>`; lists its member certs.
+- **`PublicKeyCertificate`** (`chess_identity_key_1`): `isActive=true`; `jsonWebKey` = the JWK
+  (kty/kid/alg/n/e + **x5c**). Its embedded `kid` must equal the JWT header `kid`.
+Retrieve to verify: `sf project retrieve start --metadata "PublicKeyCertificateSet:<name>"`. All of
+this was confirmed correct in-org 2026-06-24 (issuer byte-matches; key pair's modulus matches
+Heroku's signing key) — yet conversations still bound UNAUTH, which pointed to the client, below.
+
+### ⚠️ A correct keyset is necessary but NOT sufficient — the WIDGET must actually set the token
+Conversations can STILL bind `UNAUTH` with every static config correct (issuer byte-matches, cert
+active, x5c present, key pair matches Heroku's signing key, Contact exists, `authMode=Auth`) if the
+**client never successfully calls `setIdentityToken` before the conversation opens.** A concrete way
+this happens (hit 2026-06-24): a re-mint **loop** — when the token is rejected, Salesforce fires
+`onEmbeddedMessagingIdentityTokenExpired` immediately; an unconditional re-mint loops (40+
+`/identity_token` hits/sec in the Heroku router log), freezes the tab, and every conversation created
+during the storm opens UNAUTH. Guard the expiry handler (cap re-mints per window). Also: the ESD
+**bootstrap script is cached** — after enabling verification, republish the deployment and
+hard-refresh, or the browser keeps a pre-verification bootstrap.
+
+**Verify (run AFTER a clean conversation on fixed client code):** the newest MessagingEndUser has
+`ContactId` populated and `MessagingPlatformKey` contains `AUTH/...` (not `UNAUTH`). NOTE:
+`MessagingChannel.IsAuthenticated` was observed `false` even with `authMode=Auth` set — treat the
+MessagingEndUser `AUTH/...` + non-null `ContactId` as the source of truth, not that channel flag.
 
 ## Public key (RS256, registered in Salesforce)
 
