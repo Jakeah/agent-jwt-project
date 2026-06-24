@@ -27,10 +27,22 @@
         <apexClass>ChessCoachNameOpening</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <!-- Live-game pull for the verified coach (continuity-trap fix): the agent calls this each turn
+         to read the player's CURRENT board from Rails, keyed by the verified Contact's email. -->
+    <classAccesses>
+        <apexClass>ChessCoachGetLiveGame</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <!-- Access to the external credential principal behind the ChessCoachApi Named Credential,
          so the agent user's Apex callouts can authenticate to the chess REST facade. -->
     <externalCredentialPrincipalAccesses>
         <externalCredentialPrincipal>ChessMCP-MCPAuthentication</externalCredentialPrincipal>
+        <enabled>true</enabled>
+    </externalCredentialPrincipalAccesses>
+    <!-- Access to the ChessLiveGame principal so the agent user's callout to the Rails live-game
+         endpoint can resolve the bearer-header principal (the verified-coach pull). -->
+    <externalCredentialPrincipalAccesses>
+        <externalCredentialPrincipal>ChessLiveGame-ChessLiveGamePrincipal</externalCredentialPrincipal>
         <enabled>true</enabled>
     </externalCredentialPrincipalAccesses>
     <!-- Read on UserExternalCredential is required at callout time to resolve the principal. -->
