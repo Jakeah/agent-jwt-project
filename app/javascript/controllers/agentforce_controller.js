@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
-import { gameStateForPrechat } from "game_state";
+import { gameStateForPrechat, hasActiveGame } from "game_state";
 
 // Embeds the Salesforce MIAW (Messaging for In-App and Web) chat widget and wires verified
 // identity onto it. Mounted only on authenticated pages (the layout gates on user_signed_in?),
@@ -157,6 +157,7 @@ export default class extends Controller {
   // Consumed only at conversation creation, so this keeps a chat OPENED mid-game correct.
   seedGameContext() {
     if (!this.isReady) return; // widget not up yet; handleReady will seed once it is
+    if (!hasActiveGame()) return; // no game on this page → don't seed a blank/start position
     try {
       const api = window.embeddedservice_bootstrap?.prechatAPI;
       if (api && typeof api.setHiddenPrechatFields === "function") {
@@ -181,6 +182,7 @@ export default class extends Controller {
   // structured _AgentContext value carrying the same keys the agent already reads from prechat.
   pushLiveContext() {
     if (!this.isReady) return;
+    if (!hasActiveGame()) return; // nothing meaningful to push outside a game
     try {
       const util = window.embeddedservice_bootstrap?.utilAPI;
       if (util && typeof util.setSessionContext === "function") {

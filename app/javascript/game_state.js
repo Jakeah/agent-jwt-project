@@ -51,6 +51,17 @@ export function getGameState() {
   return { ...state };
 }
 
+// True only when a real game is loaded on the page. The agentforce controller is mounted on every
+// authenticated page (it's in the layout), but game_state is a module singleton that resets to the
+// untouched starting position on each full page load and only gets real data once a chess
+// controller publishes (which sets gameId). Opening the chat from the games LIST — or before any
+// move — would otherwise seed the coach with a blank/start position, and it (correctly) replies
+// "I don't see any moves." Gate context-seeding on this so the coach only gets game state when
+// there genuinely is a game.
+export function hasActiveGame() {
+  return state.gameId != null;
+}
+
 // MIAW custom parameters are capped at 255 chars (Phase 4 gotcha). PGN of a long game blows
 // past that, so keep the OPENING — the head of the PGN — which is what lets the coach name the
 // opening and reason about the plan. We drop whole trailing moves (never a partial token) and
