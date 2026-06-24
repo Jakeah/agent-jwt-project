@@ -1017,3 +1017,141 @@ flow input variable literally named `Chess_FEN`. There is no separate flow-varia
 
 Bonus: the MessagingChannel + Chess_Coach_Routing_v2 flow now retrieve cleanly (the earlier status-1
 retrieve failed only because the active flow didn't exist yet) — both vendored into source now.
+
+## 2026-06-24 — Native MCP actions CONFIRMED firing (the open question, closed)
+
+Built a dedicated experiment agent `Chess_Coach_MCP` — a full clone of the production Chess Coach
+(all MIAW/game vars, before_reasoning name lookup, both helper subagents, the `get_player_name` Apex
+action) with the 4 engine actions deliberately omitted, so the only variable under test is the native
+`mcpTool://` wiring. Authored everything *except* the MCP actions in source; added the 4 ChessMCP
+tools (`analyze_fen`, `best_move`, `name_opening`, `explain_move`) **in the builder**, then Saved →
+Committed → Activated.
+
+Retrieved the activated planner bundle and decoded its base64 `agentScript/*.agent`. **All 4 bindings
+confirmed**, generalizing the pattern we'd only seen for `analyze_fen`:
+
+  analyze_fen  → target: mcpTool://mcptoolx5fx5fanalyzex5ffen   source: ac87fbaba830738a5a8426570d3b2998d
+  best_move    → target: mcpTool://mcptoolx5fx5fbestx5fmove     source: a01f925b1425e355c808d5546c4a23d29
+  name_opening → target: mcpTool://mcptoolx5fx5fnamex5fopening  source: a133e570ebcdc3216a2006b763f58057f
+  explain_move → target: mcpTool://mcptoolx5fx5fexplainx5fmove  source: ae85c69cebea2380aa530fdb350022cdb
+
+The `_`→`x5f` hex escaping + `mcptool__` prefix hold for every tool. The risky array input bound fine:
+`name_opening`'s `moves` array became `list[object]` + `complex_data_type_name: "lightning__textType"`.
+Every input carries the weak `label: "string"` (MCP schema names params generically — server-side fix).
+
+THE KEY FINDING — activation is what makes MCP fire. The authoring-bundle preview never invoked MCP
+(that's why the earlier in-place migration looked broken). But previewing the **activated** agent with
+`--api-name Chess_Coach_MCP` and asking for an engine analysis returned a real Stockfish eval
+(`+0.17 for White`). Proof it went native, not via the Apex shim: tailing the MCP server's own Heroku
+logs (`chess-mcp-coach`), the test sends landed on **`POST /mcp`** (full Streamable-HTTP handshake:
+initialize → 202 notify → tools/list → GET SSE → DELETE, then the tool call) from Salesforce egress
+IPs `10.77.x.x` — NOT on the `/api/analyze`/`/api/best-move` REST paths the Apex shim uses. So: MCP
+validates + publishes but won't run in authoring-bundle preview; once activated it performs the real
+MCP protocol exchange against the server.
+
+Production `Chess_Coach` remains untouched on its 5 Apex actions (reverted clean earlier). Findings
+promoted to the skill ref: ~/.claude/skills/developing-agentforce/references/mcp-tool-actions.md
+(Last verified bumped to 2026-06-24; analyze_fen-only caveats removed; array-input + activation
+callouts added).
+
+OPEN / NEXT: decide path forward. Native MCP works, so the question is optimization, not feasibility —
+(1) fix the MCP server tool schemas to emit real param names (kill the `label: "string"`), (2) decide
+whether to migrate the production Coach off the Apex shim onto MCP (trade-off: less code/maintenance
+vs. org-coupled `source:`/`target:` ids that hurt SOMA/MOMA portability — see skill ref §6), (3) the
+`source:` hashes are per-org so a reusable asset must regenerate the MCP action block per org.
+
+## 2026-06-24 — MCP server: per-param titles (label experiment) + filled depth descriptions
+
+Re-decoding Chess_Coach_MCP showed the platform stamps `label: "string"` on EVERY native MCP action
+input — including `depth` (integer) and `moves` (array). So the label is NOT derived from the param
+name or type (my earlier "generic naming" guess was wrong — the live tools/list schema is well-formed:
+real names, types, descriptions). It's a placeholder the platform inserts when a schema property has no
+JSON-schema `title`.
+
+Server-side experiment: added `.meta({ title, description })` to all params across the 4 tools (zod v4
+folds .describe() into .meta), so the emitted schema now carries a real `title`. Verified through the
+MCP SDK's own zod→JSON-schema converter (`toJsonSchemaCompat`) that `.meta({title})` becomes a property
+`title`, booted locally to confirm tools/list emits them, then deployed (`git subtree push --prefix
+chess-mcp heroku-mcp main` — went through first try, user was logged in; Released v6). Live tools/list
+now shows title+desc on every param. Tests 10/10 green.
+
+Also filled the two `depth` params that had NO description (best_move, explain_move) — real planner
+value, independent of the label question.
+
+OPEN (needs builder round-trip): does the platform now surface the `title` as the action `label:`
+instead of "string"? To find out: re-add a tool to the coach subagent in the builder, Save → Commit →
+Activate, then retrieve the new planner version, decode its agentScript, and check the `label:` field.
+The MCP server caches nothing, but Agentforce derives the GenAiFunction inputs at action-add time — so
+the tool must be re-added (or the action refreshed) in the builder to pick up the new schema.
+
+## 2026-06-24 — label experiment RESOLVED: schema `title` → action `label:` (confirmed)
+
+The `.meta({title})` experiment is proven. After deploying the titled schema (v6) and reactivating the
+agent, the decoded Chess_Coach_MCP **v4** agentScript shows every input label flipped from the `"string"`
+placeholder to the real title:
+
+  fen   → label: "FEN Position"     depth → label: "Search Depth"
+  move  → label: "Move Played"      moves → label: "Moves (SAN)"
+
+So: the Agentforce MCP-action input `label:` is driven by the tool schema's per-property JSON-schema
+`title`; with no title the platform stamps the literal `"string"`. Fix = emit `title` server-side
+(zod v4: `.meta({ title, description })`).
+
+GOTCHA discovered along the way (now in skill ref §5): the tool catalog is CACHED at registration time.
+Editing the MCP Server registration Details and re-saving does NOT re-pull tools/list — the schema stayed
+2 days stale (empty depth descriptions, no titles) through a builder re-add (that produced v3, still
+`label: "string"`). The fix: Setup → Agentforce Registry → MCP Servers → ChessMCP → **Tools** tab, where
+each tool showed a yellow **⚠ Out of Sync** badge; syncing that re-fetched the live schema (titles +
+descriptions appeared). THEN re-add the action in the builder → Save → Commit → Activate (v4) → titles
+land in the decoded `label:`. The builder's Inputs screen also now shows "FEN Position" / "Search Depth"
+as the input names instead of bare types.
+
+Net for the project: Chess_Coach_MCP is the clean reference (v4, all 4 native MCP tools, real labels +
+descriptions). Production Chess_Coach untouched on Apex. Skill ref mcp-tool-actions.md §5 rewritten from
+"cosmetic placeholder, probably not fixable" → "confirmed title-driven, here's the fix + the re-sync
+gotcha". chess-mcp server change committed (46a7281) + deployed (Released v6).
+
+## 2026-06-24 — Chess_Coach_MCP v4 behavioral pass (performative ✅)
+
+Ran a 4-utterance behavioral test against the activated v4 (native MCP), one per tool, each with an
+independently-checkable position. All grounded in real Stockfish over /mcp (log service= 120–500ms):
+  - analyze_fen : Italian Game → "+0.17 White", recommends Nf6. Correct.
+  - best_move   : mate-in-1 → Qxf7#. Found the checkmate.
+  - explain_move: ...Qg5 after 1.e4 e5 2.Nf3 → BLUNDER, +7.4 swing, best was Nc6. Correct (Nxg5 wins Q).
+  - name_opening: e4 e5 Nf3 Nc6 Bb5 → Ruy López / Spanish. Correct.
+
+Best behavior observed: fed a malformed FEN (knight already off g8, so Nf6 illegal), the agent called
+the engine, got "illegal/unparseable", and ASKED FOR CLARIFICATION rather than fabricating a verdict —
+exactly the "never invent evaluations" grounding we want. (That first explain_move test was a bad
+fixture on my end; re-ran with a valid blunder position → correct.)
+
+Minor: in the mate test the agent's prose mislabeled Qxf7# as "Fool's Mate" (it's the Scholar's-mate
+pattern). LLM terminology slip only — the engine move was right. Not worth chasing unless tightening
+opening/pattern naming becomes a goal.
+
+Conclusion: native-MCP Chess_Coach_MCP is functionally on par with the Apex-shim production Coach —
+fires all 4 tools, grounds every concrete claim, handles bad input honestly, coaches well.
+
+## 2026-06-24 — naming-accuracy guardrail added to both agents (prod activated v6)
+
+The "Fool's Mate" slip was an UNGROUNDED pattern name from the reasoning LLM, not a tool/server bug:
+the MCP/Apex tools return only numbers + moves + opening names (openings ARE grounded — name_opening is
+a longest-prefix lookup in chess-mcp/src/openings.js, which is why the opening name was always right).
+Mate/tactical pattern names had no tool and no instruction governing them, so the model free-associated.
+
+Fix = instruction guardrail in the "How to coach" block (NOT a server change — user's call, correct):
+"Name openings and tactical/mating patterns accurately. Use the opening tool... Only name a specific
+mating pattern (Scholar's Mate, Fool's Mate, smothered mate, back-rank mate) when you are certain it
+fits; if unsure, describe the pattern instead of naming it. Do not invent pattern names the way you
+would not invent an evaluation."
+
+- Production Chess_Coach: edited source → validate (success) → publish → activate = **v6**. Verified on
+  the activated agent: the mate-in-1 test now returns "Scholar's Mate" (was "Fool's Mate"), engine move
+  Qxf7# still grounded. DONE.
+- Chess_Coach_MCP: same instruction added to source. ALSO backfilled the 4 native MCP action blocks
+  from the decoded v4 (exact source:/target:/inputs incl. the titled labels) so source finally matches
+  the live builder agent. **Validated clean — confirming hand-authored mcpTool:// source compiles**
+  (resolves an open skill-ref question). NOT published: per user, the source-over-builder publish (would
+  be v5) is held to avoid risking the builder linkage during a wording fix. Source is updated + ready;
+  builder v4 remains the activated MCP version. To ship the MCP wording fix without the source-publish
+  risk, paste the instruction line in the builder → Save→Commit→Activate.

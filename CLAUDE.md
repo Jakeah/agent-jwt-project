@@ -22,6 +22,14 @@ and widget embed are config-driven via `config/agent_deployments.yml`.
   Omni-Flow Update Records → MessagingSession custom field → agent `@MessagingSession.X__c`), and
   why the direct `source: @context.*`/prechat binding does NOT work.
 
+## External references (cross-project, update-proof anchor)
+
+- **Native MCP tool actions** (`mcpTool://`) — reverse-engineered syntax + discovery steps + gotchas
+  from this org's working agent, captured in the `developing-agentforce` skill at
+  `~/.claude/skills/developing-agentforce/references/mcp-tool-actions.md`. Pointer kept here too so
+  it survives a skill update overwriting the skill's own internal link. Relevant to the in-progress
+  migration of the 4 Chess Coach engine actions off the Apex→REST shim onto native MCP.
+
 ## Key facts
 
 - **Salesforce org:** `chess-agent` (default `sf` target-org, set globally).
