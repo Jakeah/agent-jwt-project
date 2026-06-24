@@ -59,9 +59,14 @@ export default class extends Controller {
     this.onReady = this.handleReady.bind(this);
     this.onTokenExpired = this.handleTokenExpired.bind(this);
     this.onGameStateChanged = this.handleGameStateChanged.bind(this);
+    this.onButtonCreated = this.handleButtonCreated.bind(this);
 
     window.addEventListener("onEmbeddedMessagingReady", this.onReady);
     window.addEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
+    // launchChat is only callable AFTER onEmbeddedMessagingButtonCreated (the widget's own rule —
+    // it rejects "API not available before onEmbeddedMessagingButtonCreated event is fired"). The
+    // reset path waits for this event before launching a fresh conversation.
+    window.addEventListener("onEmbeddedMessagingButtonCreated", this.onButtonCreated);
     // React to board changes: re-seed prechat (helps a chat opened later) AND push live context
     // into an open conversation (the mid-game freshness fix). Both guard on isWidgetReady internally.
     window.addEventListener("chess:state-changed", this.onGameStateChanged);
@@ -111,6 +116,7 @@ export default class extends Controller {
   disconnect() {
     window.removeEventListener("onEmbeddedMessagingReady", this.onReady);
     window.removeEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
+    window.removeEventListener("onEmbeddedMessagingButtonCreated", this.onButtonCreated);
     window.removeEventListener("chess:state-changed", this.onGameStateChanged);
     if (this.resetDebugHandlers) {
       for (const [name, fn] of Object.entries(this.resetDebugHandlers)) {
@@ -201,10 +207,17 @@ export default class extends Controller {
     await this.setIdentityToken();
     this.seedGameContext();
     this.pushLiveContext(); // push current board straight away so the first turn is live
+    // NOTE: launchChat is NOT called here — it's not available until onEmbeddedMessagingButtonCreated
+    // (see handleButtonCreated). Calling it from ready rejects with "API not available before
+    // onEmbeddedMessagingButtonCreated event is fired", which left the old conversation to just resume.
+  }
 
-    // If this ready fired because the user asked to reset, open a fresh conversation now that we're
-    // re-verified + re-seeded. shouldStartNewConversation requires Enhanced Web Chat v2 and only
-    // takes effect when the prior conversation is in the ended state — which clearSession guarantees.
+  // The chat button has been (re)created → launchChat is now callable. This is the correct hook for
+  // the reset: after clearSession ends the verified conversation, the widget rebuilds the button and
+  // fires this; only now can we launch a brand-new conversation. (Docs: launchChat must be called
+  // after onEmbeddedMessagingButtonCreated.)
+  handleButtonCreated() {
+    rlog("onEmbeddedMessagingButtonCreated fired (relaunchAfterReady=" + !!this.relaunchAfterReady + ")");
     if (this.relaunchAfterReady) {
       this.relaunchAfterReady = false;
       this.launchFreshConversation();
