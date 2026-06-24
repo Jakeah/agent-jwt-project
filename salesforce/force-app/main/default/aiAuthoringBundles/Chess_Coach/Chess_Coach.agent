@@ -53,6 +53,26 @@ variables:
     PlayerName: mutable string = ""
         description: "The verified player's first name, for a personal greeting."
 
+    # --- LIVE game state, pulled fresh each turn for the VERIFIED player (continuity-trap fix) ---
+    # The Chess_*__c linked vars above are hidden-prechat-backed and go STALE for a verified user:
+    # hidden prechat is consumed only at conversation creation, and a verified user has ONE persistent
+    # conversation that every chat-open RESUMES (never re-created), so those fields freeze at the
+    # first-open snapshot (usually empty → "you have not started your game"). See
+    # docs/miaw-prechat-to-agent-guide.md. The fix is PULL: before_reasoning calls get_live_game
+    # (keyed by the verified ContactId) to fetch the CURRENT board from the app every turn, so
+    # continuity is irrelevant. Anonymous users have no ContactId → no pull → they fall back to the
+    # prechat Chess_* vars (which work fine for them, since each anon chat is a new conversation).
+    LiveFEN: mutable string = ""
+        description: "Live current position (FEN), pulled fresh this turn. Pass to the analysis tools."
+    LivePGN: mutable string = ""
+        description: "Live moves so far (PGN), pulled fresh this turn."
+    LiveTurn: mutable string = ""
+        description: "Live side to move (White/Black), pulled fresh this turn."
+    LiveMoveCount: mutable string = ""
+        description: "Live number of full moves played, pulled fresh this turn."
+    LiveStatus: mutable string = ""
+        description: "Live game status (active/checkmate/…), pulled fresh this turn."
+
 language:
     default_locale: "en_US"
     additional_locales: ""
@@ -69,6 +89,19 @@ start_agent coach:
                 with contactId = @variables.ContactId
                 set @variables.PlayerName = @outputs.firstName
 
+        # Pull the player's LIVE game EVERY turn for a verified user (continuity-trap fix): the
+        # prechat-backed Chess_* vars go stale on a resumed verified conversation, so we re-fetch the
+        # current board from the app, keyed by the verified Contact. Runs each iteration (no cache)
+        # so the coach always sees the latest move. Anonymous users have no ContactId → skipped.
+        if @variables.ContactId is not None:
+            run @actions.get_live_game
+                with contactId = @variables.ContactId
+                set @variables.LiveFEN = @outputs.fen
+                set @variables.LivePGN = @outputs.pgn
+                set @variables.LiveTurn = @outputs.turn
+                set @variables.LiveMoveCount = @outputs.moveCount
+                set @variables.LiveStatus = @outputs.status
+
     reasoning:
         instructions: ->
             # Greeting — personal when we know the name.
@@ -77,14 +110,25 @@ start_agent coach:
             else:
                 | Greet the player warmly. You don't have their name, so keep it general.
 
-            # What you know about the live game.
-            if @variables.Chess_FEN != "":
+            # What you know about the live game. Prefer the LIVE pull (fetched this turn from the
+            # app, keyed by the verified Contact) — it stays correct on a resumed verified
+            # conversation where the prechat-backed Chess_* vars go stale. Fall back to the prechat
+            # Chess_FEN for anonymous users (no Contact → no live pull, but their prechat is fresh).
+            # Three flat, mutually-exclusive branches (AgentScript has no elif / nested if): prefer
+            # the LIVE pull; else the prechat Chess_FEN (anonymous users); else no state yet.
+            if @variables.LiveFEN != "":
+                | You can see the player's current game (live, as of right now).
+                  Moves so far (PGN): {!@variables.LivePGN}
+                  Current position (FEN): {!@variables.LiveFEN}
+                  It is {!@variables.LiveTurn} to move. Moves played: {!@variables.LiveMoveCount}. Game status: {!@variables.LiveStatus}.
+                  When the player asks about "this position", "my move", or "the game", use THIS FEN with the analysis tools.
+            if @variables.LiveFEN == "" and @variables.Chess_FEN != "":
                 | You can see the player's current game.
                   Moves so far (PGN): {!@variables.Chess_PGN}
                   Current position (FEN): {!@variables.Chess_FEN}
                   It is {!@variables.Chess_Turn} to move. Moves played: {!@variables.Chess_Move_Count}. Game status: {!@variables.Chess_Status}.
                   When the player asks about "this position", "my move", or "the game", use this FEN with the analysis tools.
-            else:
+            if @variables.LiveFEN == "" and @variables.Chess_FEN == "":
                 | You don't have the player's game state yet. If they ask about a specific position, ask them to share the FEN or describe the moves.
 
             | How to coach:
@@ -94,15 +138,16 @@ start_agent coach:
               Ground every concrete claim about the position in the engine tools — use analyze_position
               for an evaluation and best continuation, get_best_move when the player asks what to play,
               judge_move when they ask whether a specific move was good, and identify_opening to name
-              the opening. Pass the current FEN (Chess_FEN) to the position tools. Report what the
-              engine returns in plain, motivating language — do NOT invent evaluations.
+              the opening. Pass the current FEN to the position tools — use LiveFEN when it is set
+              (it is the live board), otherwise Chess_FEN. Report what the engine returns in plain,
+              motivating language — do NOT invent evaluations.
               Name openings and tactical/mating patterns accurately. Use identify_opening to name
               openings rather than guessing. Only name a specific mating pattern (e.g. Scholar's Mate,
               Fool's Mate, smothered mate, back-rank mate) when you are certain it fits the position;
               if unsure, describe the pattern in plain terms instead of giving it a name. Do not invent
               pattern names the way you would not invent an evaluation.
-              If the player tells you a move or position that differs from Chess_FEN, use what they
-              gave you so your coaching tracks the live game even as it moves on.
+              If the player tells you a move or position that differs from the live board, use what
+              they gave you so your coaching tracks the live game even as it moves on.
               Do NOT use the show_command tool. Always compose your response as direct text.
 
         actions:
@@ -113,13 +158,13 @@ start_agent coach:
             # is set, otherwise the FEN/moves the player gives in chat. (Binding fen to the variable
             # forced an empty value whenever Chess_FEN was blank.)
             analyze_position: @actions.analyze_position
-                description: "Evaluate a position. Pass the current FEN — use the Chess_FEN variable when it is set, otherwise the position the player describes."
+                description: "Evaluate a position. Pass the current FEN — use LiveFEN when it is set, else Chess_FEN, else the position the player describes."
             get_best_move: @actions.get_best_move
-                description: "Get the engine's best move. Pass the current FEN (Chess_FEN if set, else what the player gives)."
+                description: "Get the engine's best move. Pass the current FEN (LiveFEN if set, else Chess_FEN, else what the player gives)."
             judge_move: @actions.judge_move
                 description: "Judge whether a move the player asks about was good. Pass the FEN of the position BEFORE the move and the move in SAN or UCI."
             identify_opening: @actions.identify_opening
-                description: "Name the opening. Pass the moves played in SAN (from Chess_PGN if set, else what the player lists)."
+                description: "Name the opening. Pass the moves played in SAN (from LivePGN if set, else Chess_PGN, else what the player lists)."
 
     # Action definitions — backing logic + I/O. Referenced above and in before_reasoning.
     actions:
@@ -132,6 +177,32 @@ start_agent coach:
             outputs:
                 firstName: string
                     description: "Player's first name"
+                    is_displayable: False
+        get_live_game:
+            # The continuity-trap fix: pulls the verified player's CURRENT board from the Rails app
+            # (apex://ChessCoachGetLiveGame → callout:ChessLiveGame /coach/game_state, keyed by the
+            # Contact's email). Called in before_reasoning every turn so the coach tracks the live
+            # game even though hidden-prechat Chess_* vars freeze on a resumed verified conversation.
+            description: "Fetch the verified player's current live game (FEN, moves, whose turn) from the app, keyed by their Contact Id."
+            target: "apex://ChessCoachGetLiveGame"
+            inputs:
+                contactId: string
+                    description: "Verified player's Contact Id"
+            outputs:
+                fen: string
+                    description: "Current position in FEN — the live board (empty if no active game)"
+                    is_displayable: False
+                pgn: string
+                    description: "Moves played so far in PGN"
+                    is_displayable: False
+                turn: string
+                    description: "Side to move: White or Black"
+                    is_displayable: False
+                moveCount: string
+                    description: "Number of full moves completed"
+                    is_displayable: False
+                status: string
+                    description: "active / checkmate / stalemate / draw / resigned"
                     is_displayable: False
         # --- engine-grounded coaching tools ---
         # Backed by Apex invocable classes that call the chess coaching REST facade (Stockfish on
