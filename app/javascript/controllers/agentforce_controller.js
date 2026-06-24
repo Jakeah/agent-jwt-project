@@ -31,6 +31,12 @@ import { gameStateForPrechat } from "game_state";
 // here, so SOMA/MOMA stays a config change.
 const COACH_MODE_KEY = "coachMode";
 const CONTEXT_DEBOUNCE_MS = 400; // collapse a flurry of moves into one settled setSessionContext
+// Re-mint loop guard: if Salesforce rejects the identity token, it fires the "expired" event
+// immediately; blindly re-minting a token that will also be rejected loops forever and freezes the
+// tab. A legit token expires every few MINUTES, so more than a handful of expiries in this window
+// means the token is being REJECTED (e.g. no matching Contact for the signed-in email) — stop.
+const REMINT_WINDOW_MS = 30000;
+const MAX_REMINTS_PER_WINDOW = 5;
 
 export default class extends Controller {
   static values = {
@@ -57,6 +63,8 @@ export default class extends Controller {
 
     this.isReady = false;
     this.contextTimer = null;
+    this.remintTimes = []; // timestamps of recent re-mints, for the loop guard
+    this.remintHalted = false;
 
     // Only stand up MIAW when the user has the Apex coach selected. In headless mode the MCP
     // coach owns the page and we leave the widget entirely out of the DOM.
@@ -189,7 +197,26 @@ export default class extends Controller {
   }
 
   // --- 3. Token expiry → re-mint within the 30s window or the session is cleared ---
+  // Guarded against a re-mint storm: Salesforce fires this event immediately when it REJECTS a
+  // token (e.g. the signed-in email has no matching Contact), so naive re-minting loops forever
+  // and freezes the tab. A valid token only expires every few minutes, so > MAX in the window
+  // means rejection, not expiry — stop re-minting and surface it once.
   handleTokenExpired() {
+    if (this.remintHalted) return;
+
+    const now = Date.now();
+    this.remintTimes = this.remintTimes.filter((t) => now - t < REMINT_WINDOW_MS);
+    this.remintTimes.push(now);
+
+    if (this.remintTimes.length > MAX_REMINTS_PER_WINDOW) {
+      this.remintHalted = true;
+      console.error(
+        "[agentforce] identity token repeatedly rejected — halting re-mint loop. " +
+          "Likely no Salesforce Contact matches the signed-in email (verification enforced).",
+      );
+      return;
+    }
+
     this.setIdentityToken();
   }
 
