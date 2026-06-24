@@ -1348,3 +1348,47 @@ ContactId; MessagingChannel.IsAuthenticated=true. End-to-end verified identity n
 docs/agentforce-user-verification-guide.md (open item → RESOLVED note; Last verified bumped to 2026-06-24).
 General lesson worth remembering: if a Setup field you expect is missing, re-open the record via full Edit
 from the list view before concluding the feature isn't there.
+
+---
+
+## 2026-06-24 (afternoon) — Chess_FEN__c null for the VERIFIED coach: root cause = conversation continuity
+
+Long hunt, big payoff. After verification went live, the Apex coach (MIAW) stopped knowing the live
+position — `MessagingSession.Chess_FEN__c` came back **null** on every new chat. Chased it through
+four layers before the data settled it.
+
+**What it was NOT (each ruled out with evidence, not theory):**
+- NOT a seed-timing / Turbo-lifecycle bug. Shipped v20 (hasActiveGame gate) + v21/v23 (isWidgetReady
+  seeding) — sound fixes, but the null survived all of them.
+- NOT the double bootstrap init. The v22 diagnostics DID catch a real bug: on a list→game Turbo nav,
+  `connect()`/`loadBootstrap` fired twice and injected a 2nd ESW bootstrap → "Cannot read properties
+  of undefined" from bootstrap.min.js; the 2nd `boot.init()` reset the prechat buffer. Fixed in v23 by
+  tracking inject+init on `window` (the only thing surviving a Turbo body swap) → single init, no
+  TypeError. Worth fixing — but it was NOT the cause of the null.
+- NOT an SCRT2 front-door drop (prechat-guide Gotcha 0). Metadata still had Pre-Chat active + all 5
+  hidden fields; channel param-mappings non-empty; flow runs (it sets EndUserContactId every time).
+- NOT a config change at 14:54. No republish flipped anything.
+
+**What it IS (proven by grouping MessagingSessions on `ConversationId`):**
+- Anonymous (UNAUTH) chats: each open = a NEW ConversationId → prechat consumed at create → FEN lands
+  EVERY time.
+- Verified (AUTH) chats: **13 opens over 3 hours ALL shared ONE ConversationId (0dwg8000000ISQrAAO).**
+  Only the first (14:16, the create) carried a FEN; all 12 resumes → null. The browser resumes the
+  one persistent conversation via `continuityAccessToken` (seen in the Network waterfall).
+- Hidden prechat is consumed ONLY at conversation creation. A verified user never re-creates their
+  conversation, so `setHiddenPrechatFields` is a silent no-op on every resume. That's the whole bug —
+  and it's architectural (verification ⇒ continuity), not a wiring mistake.
+
+**Both client→agent freshness channels are dead for the verified path:** prechat (consumed once) and
+`utilAPI.setSessionContext` (the intended mid-conversation API — but the v22/v23 logs show it's "not
+available" on this widget build).
+
+**Decided fix:** an Apex action the agent calls each turn to re-fetch live game state server-side,
+keyed by the verified Contact's email (game is persisted to Rails every move). Pull, not push →
+continuity is irrelevant, and it reuses the same grounding the headless coach already does. (Rejected:
+end+recreate the conversation per open — would force prechat to re-run but destroy verified
+continuity/history.)
+
+Captured as a "read this first" section in docs/miaw-prechat-to-agent-guide.md (the ConversationId
+query is the diagnostic). Diagnostics (DEBUG=true) still in agentforce_controller.js — strip once the
+Apex-pull path is in and verified.
