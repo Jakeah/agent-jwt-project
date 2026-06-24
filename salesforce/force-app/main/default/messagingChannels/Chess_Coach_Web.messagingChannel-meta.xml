@@ -71,6 +71,12 @@
         <isFallbackMessageEnabled>false</isFallbackMessageEnabled>
         <isSaveTranscriptEnabled>false</isSaveTranscriptEnabled>
         <maxFileSize>5</maxFileSize>
+        <messagingAuthorizations>
+            <authIdentifier>ChessVerification</authIdentifier>
+            <authorizationType>PublicKeyCertificateSet</authorizationType>
+            <enabled>true</enabled>
+            <publicKeyCertificateSetName>Chess_Identity_Keyset</publicKeyCertificateSetName>
+        </messagingAuthorizations>
         <verifiedUserJwtExpirationTime>60</verifiedUserJwtExpirationTime>
     </embeddedConfig>
     <masterLabel>Chess Coach Web</masterLabel>

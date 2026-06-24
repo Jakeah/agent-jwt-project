@@ -31,6 +31,13 @@ import { gameStateForPrechat, hasActiveGame } from "game_state";
 // here, so SOMA/MOMA stays a config change.
 const COACH_MODE_KEY = "coachMode";
 const CONTEXT_DEBOUNCE_MS = 400; // collapse a flurry of moves into one settled setSessionContext
+// TEMPORARY diagnostics for the "Chess_FEN__c null at conversation-create" bug. The MessagingSession
+// row shows the prechat buffer was empty when the conversation was created — but it's INTERMITTENT
+// (a real FEN landed at 14:16, then null on identical code at 15:25/37/51), which means a timing
+// race, not a flat logic bug. This logs the exact guard state + payload at every seed decision so a
+// single test pins down which path opened the conversation with an empty buffer. Remove once proven.
+const DEBUG = true;
+const dlog = (...args) => DEBUG && console.log("[agentforce:diag]", ...args);
 // Re-mint loop guard: if Salesforce rejects the identity token, it fires the "expired" event
 // immediately; blindly re-minting a token that will also be rejected loops forever and freezes the
 // tab. A legit token expires every few MINUTES, so more than a handful of expiries in this window
@@ -77,6 +84,12 @@ export default class extends Controller {
     // controller reconnects but the ready event does NOT fire again — so we must seed from
     // connect() if the widget is already up. Otherwise the prechat buffer stays empty and the
     // conversation opens with no game state (Chess_FEN__c null → "I don't see any moves").
+    dlog("connect()", {
+      coachMode: this.coachMode(),
+      widgetReady: this.isWidgetReady(),
+      hasActiveGame: hasActiveGame(),
+      fen: gameStateForPrechat().Chess_FEN || "(none)",
+    });
     if (this.isWidgetReady()) {
       this.seedGameContext();
       this.pushLiveContext();
@@ -109,9 +122,11 @@ export default class extends Controller {
   loadBootstrap() {
     if (window.embeddedservice_bootstrap || document.getElementById("esw-bootstrap")) {
       // Already loaded this page session — just (re)initialize for the verified user.
+      dlog("loadBootstrap: bootstrap already present → re-init", { bootstrapExists: !!window.embeddedservice_bootstrap });
       if (window.embeddedservice_bootstrap) this.initEmbeddedMessaging();
       return;
     }
+    dlog("loadBootstrap: injecting bootstrap script (first load this window)");
 
     const script = document.createElement("script");
     script.id = "esw-bootstrap";
@@ -137,6 +152,10 @@ export default class extends Controller {
   // Fires once per window-persisted bootstrap (typically on the first page). On later Turbo
   // navigations it won't fire again — connect() handles seeding for that case via isWidgetReady().
   async handleReady() {
+    dlog("onEmbeddedMessagingReady fired", {
+      hasActiveGame: hasActiveGame(),
+      fen: gameStateForPrechat().Chess_FEN || "(none)",
+    });
     await this.setIdentityToken();
     this.seedGameContext();
     this.pushLiveContext(); // push current board straight away so the first turn is live
@@ -173,10 +192,12 @@ export default class extends Controller {
   // Push the current board into hidden prechat fields → conversation variables the coach reads.
   // Consumed only at conversation creation, so this keeps a chat OPENED mid-game correct.
   seedGameContext() {
-    if (!this.isWidgetReady()) return; // prechat API not up yet; connect()/handleReady seed once it is
-    if (!hasActiveGame()) return; // no game on this page → don't seed a blank/start position
+    if (!this.isWidgetReady()) return dlog("seedGameContext SKIP: widget not ready");
+    if (!hasActiveGame()) return dlog("seedGameContext SKIP: no active game");
     try {
-      window.embeddedservice_bootstrap.prechatAPI.setHiddenPrechatFields(gameStateForPrechat());
+      const fields = gameStateForPrechat();
+      dlog("seedGameContext → setHiddenPrechatFields", fields);
+      window.embeddedservice_bootstrap.prechatAPI.setHiddenPrechatFields(fields);
     } catch (err) {
       console.error("[agentforce] failed to seed game context:", err);
     }
@@ -195,17 +216,21 @@ export default class extends Controller {
   // reasons about the current position on its next turn — not the chat-open snapshot. Sent as a
   // structured _AgentContext value carrying the same keys the agent already reads from prechat.
   pushLiveContext() {
-    if (!this.isWidgetReady()) return;
-    if (!hasActiveGame()) return; // nothing meaningful to push outside a game
+    if (!this.isWidgetReady()) return dlog("pushLiveContext SKIP: widget not ready");
+    if (!hasActiveGame()) return dlog("pushLiveContext SKIP: no active game");
     try {
       const util = window.embeddedservice_bootstrap?.utilAPI;
       if (util && typeof util.setSessionContext === "function") {
+        const fields = gameStateForPrechat();
+        dlog("pushLiveContext → setSessionContext", fields);
         util.setSessionContext([
           {
             name: "_AgentContext",
-            value: { valueType: "StructuredValue", value: gameStateForPrechat() },
+            value: { valueType: "StructuredValue", value: fields },
           },
         ]);
+      } else {
+        dlog("pushLiveContext SKIP: utilAPI.setSessionContext not available");
       }
     } catch (err) {
       console.error("[agentforce] failed to push live session context:", err);

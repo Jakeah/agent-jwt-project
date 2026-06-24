@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>EXPERIMENT: a clone of the Chess Coach used to wire the OOTB ChessMCP server tools as native mcpTool:// agent actions. The 4 engine actions are added in the builder; everything else mirrors the production Chess Coach.</description>
+    <localTopicLinks>
+        <genAiPluginName>ambiguous_question_16jg8000000VeFh</genAiPluginName>
+    </localTopicLinks>
+    <localTopicLinks>
+        <genAiPluginName>coach_16jg8000000VeFh</genAiPluginName>
+    </localTopicLinks>
+    <localTopicLinks>
+        <genAiPluginName>off_topic_16jg8000000VeFh</genAiPluginName>
+    </localTopicLinks>
+    <localTopics>
+        <fullName>coach_16jg8000000VeFh</fullName>
+        <canEscalate>false</canEscalate>
+        <description>Coach the verified player about their current game and answer chess questions.</description>
+        <developerName>coach_16jg8000000VeFh</developerName>
+        <genAiPluginInstructions>
+            <description>You are a friendly, encouraging chess coach embedded in a chess web app. The player you are helping is already signed in and identity-verified, and you can see the moves they have played in the current game. Coach proactively but concisely. Ground every concrete claim about the position (best move, whether a move was a blunder, evaluation) in the chess analysis tools — never invent engine evaluations. Explain ideas in plain, motivating language a club player understands.</description>
+            <developerName>instruction0_179g8000000vURC</developerName>
+            <language>en_US</language>
+            <masterLabel>instruction0_179g8000000vURC</masterLabel>
+            <sortOrder>1</sortOrder>
+        </genAiPluginInstructions>
+        <language>en_US</language>
+        <localActionLinks>
+            <functionName>best_move_179g8000000vURC</functionName>
+        </localActionLinks>
+        <localActionLinks>
+            <functionName>get_player_name_179g8000000vURC</functionName>
+        </localActionLinks>
+        <localActionLinks>
+            <functionName>explain_move_179g8000000vURC</functionName>
+        </localActionLinks>
+        <localActionLinks>
+            <functionName>name_opening_179g8000000vURC</functionName>
+        </localActionLinks>
+        <localActionLinks>
+            <functionName>analyze_fen_179g8000000vURC</functionName>
+        </localActionLinks>
+        <localActions>
+            <fullName>get_player_name_179g8000000vURC</fullName>
+            <description>Look up the verified player&apos;s first name from their Contact.</description>
+            <developerName>get_player_name_179g8000000vURC</developerName>
+            <invocationTarget>ChessCoachGetPlayerName</invocationTarget>
+            <invocationTargetType>apex</invocationTargetType>
+            <isConfirmationRequired>false</isConfirmationRequired>
+            <isIncludeInProgressIndicator>false</isIncludeInProgressIndicator>
+            <localDeveloperName>get_player_name</localDeveloperName>
+            <masterLabel>Get Player Name</masterLabel>
+        </localActions>
+        <localActions>
+            <fullName>best_move_179g8000000vURC</fullName>
+            <description>Get the engine&apos;s best move. Pass the current FEN (Chess_FEN if set, else what the player gives). Call this whenever the player asks what to play or what the best move is.</description>
+            <developerName>best_move_179g8000000vURC</developerName>
+            <invocationTarget>1XOg80000000fJMGAY</invocationTarget>
+            <invocationTargetType>mcpTool</invocationTargetType>
+            <isConfirmationRequired>false</isConfirmationRequired>
+            <isIncludeInProgressIndicator>false</isIncludeInProgressIndicator>
+            <localDeveloperName>best_move</localDeveloperName>
+            <masterLabel>best_move - ChessMCP</masterLabel>
+            <source>a01f925b1425e355c808d5546c4a23d29</source>
+        </localActions>
+        <localActions>
+            <fullName>explain_move_179g8000000vURC</fullName>
+            <description>Judge whether a move the player asks about was good. Pass the FEN of the position BEFORE the move and the move in SAN or UCI. Call this whenever the player asks if a move was good, a blunder, etc.</description>
+            <developerName>explain_move_179g8000000vURC</developerName>
+            <invocationTarget>1XOg80000000fJJGAY</invocationTarget>
+            <invocationTargetType>mcpTool</invocationTargetType>
+            <isConfirmationRequired>false</isConfirmationRequired>
+            <isIncludeInProgressIndicator>false</isIncludeInProgressIndicator>
+            <localDeveloperName>explain_move</localDeveloperName>
+            <masterLabel>explain_move - ChessMCP</masterLabel>
+            <source>ae85c69cebea2380aa530fdb350022cdb</source>
+        </localActions>
+        <localActions>
+            <fullName>analyze_fen_179g8000000vURC</fullName>
+            <description>Evaluate a position. Pass the current FEN — use the Chess_FEN variable when it is set, otherwise the position the player describes. Call this whenever the player asks about a position, &quot;this position,&quot; or the evaluation.</description>
+            <developerName>analyze_fen_179g8000000vURC</developerName>
+            <invocationTarget>1XOg80000000fJKGAY</invocationTarget>
+            <invocationTargetType>mcpTool</invocationTargetType>
+            <isConfirmationRequired>false</isConfirmationRequired>
+            <isIncludeInProgressIndicator>false</isIncludeInProgressIndicator>
+            <localDeveloperName>analyze_fen</localDeveloperName>
+            <masterLabel>analyze_fen - ChessMCP</masterLabel>
+            <source>ac87fbaba830738a5a8426570d3b2998d</source>
+        </localActions>
+        <localActions>
+            <fullName>name_opening_179g8000000vURC</fullName>
+            <description>Name the opening. Pass the moves played in SAN (from Chess_PGN if set, else what the player lists). Call this whenever the player asks what opening they&apos;re playing.</description>
+            <developerName>name_opening_179g8000000vURC</developerName>
+            <invocationTarget>1XOg80000000fJLGAY</invocationTarget>
+            <invocationTargetType>mcpTool</invocationTargetType>
+            <isConfirmationRequired>false</isConfirmationRequired>
+            <isIncludeInProgressIndicator>false</isIncludeInProgressIndicator>
+            <localDeveloperName>name_opening</localDeveloperName>
+            <masterLabel>name_opening - ChessMCP</masterLabel>
+            <source>a133e570ebcdc3216a2006b763f58057f</source>
+        </localActions>
+        <localDeveloperName>coach</localDeveloperName>
+        <masterLabel>Chess Coach</masterLabel>
+        <pluginType>Topic</pluginType>
+    </localTopics>
+    <localTopics>
+        <fullName>off_topic_16jg8000000VeFh</fullName>
+        <canEscalate>false</canEscalate>
+        <description>Redirect conversation back to chess when the user goes off-topic</description>
+        <developerName>off_topic_16jg8000000VeFh</developerName>
+        <genAiPluginInstructions>
+            <description>You are a friendly, encouraging chess coach embedded in a chess web app. The player you are helping is already signed in and identity-verified, and you can see the moves they have played in the current game. Coach proactively but concisely. Ground every concrete claim about the position (best move, whether a move was a blunder, evaluation) in the chess analysis tools — never invent engine evaluations. Explain ideas in plain, motivating language a club player understands.</description>
+            <developerName>instruction0_179g8000000vURD</developerName>
+            <language>en_US</language>
+            <masterLabel>instruction0_179g8000000vURD</masterLabel>
+            <sortOrder>1</sortOrder>
+        </genAiPluginInstructions>
+        <language>en_US</language>
+        <localDeveloperName>off_topic</localDeveloperName>
+        <masterLabel>Off Topic</masterLabel>
+        <pluginType>Topic</pluginType>
+    </localTopics>
+    <localTopics>
+        <fullName>ambiguous_question_16jg8000000VeFh</fullName>
+        <canEscalate>false</canEscalate>
+        <description>Ask for clarification when the user&apos;s chess request is unclear</description>
+        <developerName>ambiguous_question_16jg8000000VeFh</developerName>
+        <genAiPluginInstructions>
+            <description>You are a friendly, encouraging chess coach embedded in a chess web app. The player you are helping is already signed in and identity-verified, and you can see the moves they have played in the current game. Coach proactively but concisely. Ground every concrete claim about the position (best move, whether a move was a blunder, evaluation) in the chess analysis tools — never invent engine evaluations. Explain ideas in plain, motivating language a club player understands.</description>
+            <developerName>instruction0_179g8000000vURB</developerName>
+            <language>en_US</language>
+            <masterLabel>instruction0_179g8000000vURB</masterLabel>
+            <sortOrder>1</sortOrder>
+        </genAiPluginInstructions>
+        <language>en_US</language>
+        <localDeveloperName>ambiguous_question</localDeveloperName>
+        <masterLabel>Ambiguous Question</masterLabel>
+        <pluginType>Topic</pluginType>
+    </localTopics>
+    <masterLabel>Chess Coach MCP</masterLabel>
+    <plannerType>Atlas__ConcurrentMultiAgentOrchestration</plannerType>
+</GenAiPlannerBundle>
