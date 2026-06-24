@@ -9,12 +9,22 @@
 # User Verification config exist). Until then they are placeholders.
 #
 # `default_deployment` selects which entry the app uses when no ?deployment= param is given.
+#
+# Two implementation paths, selected by `mode:`:
+#   • mode: miaw       — embedded MIAW widget + User Verification JWT (reactive Q&A). The JWT
+#                        minter reads issuer/audience/key_id/token_ttl_seconds; the embed snippet
+#                        reads org_id/deployment_name/site_url/scrt2_url.
+#   • mode: agent_api  — headless Agentforce Agent API, driven server-to-server from Rails so the
+#                        app can auto-comment on moves. Reads agent_id/my_domain_url/api_base. The
+#                        OAuth client-credentials secrets live in ENV (AGENTFORCE_CONSUMER_KEY /
+#                        AGENTFORCE_CONSUMER_SECRET), NOT here — same discipline as the RS256 key.
 
 default_deployment: chess_support
 
 deployments:
   chess_support:
     label: "Chess Support (chess-agent org)"
+    mode: miaw                               # embedded widget + User Verification JWT
     org_id: "00Dg8000008l1Ac"               # Salesforce org id (15-char, as embeddedservice_bootstrap.init expects)
     deployment_name: "Chess_Coach_Web"       # Embedded Service deployment dev name
     site_url: "https://trailsignup-e8eb68b2222256.my.site.com/ESWChessCoachWeb1782171470213"  # ESW bootstrap base URL
@@ -24,3 +34,18 @@ deployments:
     audience: "https://trailsignup-e8eb68b2222256.my.salesforce.com"  # JWT `aud` — Setup keys trust on iss+kid (no aud field in the keyset); this is the org My Domain as recipient. Confirm empirically via session trace; adjust if the runtime rejects on aud.
     key_id: "chess-identity-key-1"          # JWT header `kid` — matches the public key label in Setup
     token_ttl_seconds: 300                  # short-lived (5 min)
+
+  # Headless MCP coach driven by the Agentforce Agent API (server-to-server). Rails composes each
+  # turn's message (live move + FEN + opponent Elo + player name) and posts it, so the app can
+  # auto-comment after each move — what MIAW can't do. Backed by the Chess_Coach_MCP agent, which
+  # grounds on the FEN via its native MCP tools.
+  #
+  # agent_id + my_domain_url confirmed live from the org 2026-06-24 (BotDefinition query + org display).
+  # Secrets (consumer key/secret) are NOT here — set them as env/Heroku config vars once the External
+  # Client App exists (AGENTFORCE_CONSUMER_KEY / AGENTFORCE_CONSUMER_SECRET).
+  chess_mcp_headless:
+    label: "Chess Coach MCP (headless Agent API)"
+    mode: agent_api
+    agent_id: "0Xxg8000000neKTCAY"                         # Chess_Coach_MCP BotDefinition Id (ExternalCopilot)
+    my_domain_url: "https://trailsignup-e8eb68b2222256.my.salesforce.com"  # token endpoint host (org My Domain)
+    api_base: "https://api.salesforce.com"                 # Agent API base (fixed)

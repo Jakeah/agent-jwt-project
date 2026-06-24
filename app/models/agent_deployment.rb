@@ -1,8 +1,10 @@
 # Loads and looks up entries from config/agent_deployments.yml — the SOMA/MOMA registry.
 #
-# A deployment carries everything two layers need:
-#   - the JWT minter:   issuer, audience, key_id, token_ttl_seconds
-#   - the embed snippet: org_id, deployment_name, site_url, scrt2_url
+# A deployment carries everything its path needs, keyed by `mode`:
+#   - mode "miaw":      the JWT minter (issuer, audience, key_id, token_ttl_seconds) + the embed
+#                       snippet (org_id, deployment_name, site_url, scrt2_url)
+#   - mode "agent_api": the headless Agent API client (agent_id, my_domain_url, api_base). The
+#                       OAuth secrets are read from ENV, not stored here.
 #
 # Usage:
 #   AgentDeployment.find("chess_support")  → AgentDeployment or nil
@@ -10,12 +12,15 @@
 class AgentDeployment
   CONFIG_PATH = Rails.root.join("config", "agent_deployments.yml")
 
-  attr_reader :name, :label, :org_id, :deployment_name, :site_url, :scrt2_url,
-              :issuer, :audience, :key_id, :token_ttl_seconds
+  attr_reader :name, :label, :mode, :org_id, :deployment_name, :site_url, :scrt2_url,
+              :issuer, :audience, :key_id, :token_ttl_seconds,
+              :agent_id, :my_domain_url, :api_base
 
   def initialize(name, attrs)
     @name = name
     @label = attrs["label"]
+    @mode = attrs["mode"] || "miaw"   # default keeps pre-existing single-entry behavior
+    # MIAW (embedded widget + User Verification JWT)
     @org_id = attrs["org_id"]
     @deployment_name = attrs["deployment_name"]
     @site_url = attrs["site_url"]
@@ -24,6 +29,18 @@ class AgentDeployment
     @audience = attrs["audience"]
     @key_id = attrs["key_id"]
     @token_ttl_seconds = attrs["token_ttl_seconds"] || 300
+    # Headless Agent API
+    @agent_id = attrs["agent_id"]
+    @my_domain_url = attrs["my_domain_url"]
+    @api_base = attrs["api_base"]
+  end
+
+  def miaw?
+    mode == "miaw"
+  end
+
+  def agent_api?
+    mode == "agent_api"
   end
 
   class << self
@@ -49,6 +66,12 @@ class AgentDeployment
 
     def all
       config.fetch("deployments", {}).keys.map { |k| find(k) }
+    end
+
+    # The headless Agent API deployment (the MCP coach). First entry with mode: agent_api.
+    # Used by AgentChatsController so the registry key isn't hardcoded across the app.
+    def agent_api
+      all.find(&:agent_api?)
     end
 
     private

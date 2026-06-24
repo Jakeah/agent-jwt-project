@@ -10,6 +10,13 @@ Rails.application.routes.draw do
       patch :move      # persist a played move (FEN/PGN update)
       patch :finish    # mark game over (result/status)
     end
+
+    # Headless Agentforce Agent API chat for the MCP coach (the auto-comment path). A chat session
+    # is scoped to one (user, game), so it nests under the game. The frontend posts each completed
+    # turn to .../agent_chat/message and renders the reply; create/destroy bracket the SF session.
+    resource :agent_chat, only: %i[create destroy], controller: "agent_chats" do
+      post :message
+    end
   end
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

@@ -46,6 +46,10 @@ group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 
+  # Loads a gitignored .env into ENV on boot, so local dev/test gets secrets (e.g. the Agentforce
+  # ECA consumer key/secret) without exporting them by hand. Production reads Heroku config vars.
+  gem "dotenv-rails"
+
   # Audits gems for known security defects (use config/bundler-audit.yml to ignore issues)
   gem "bundler-audit", require: false
 
