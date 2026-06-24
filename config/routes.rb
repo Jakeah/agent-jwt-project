@@ -5,6 +5,12 @@ Rails.application.routes.draw do
   # controller fetches this on `onEmbeddedMessagingReady` and on token expiry.
   get "identity_token", to: "identity_tokens#show"
 
+  # Server-to-server pull of the player's LIVE game state for the verified MIAW coach. Called by an
+  # Agentforce Apex action (ChessCoachGetLiveGame) each turn, keyed by the verified Contact's email,
+  # because hidden prechat goes stale on a verified user's persistent conversation (the continuity
+  # trap — see docs/miaw-prechat-to-agent-guide.md). Bearer-token auth, NOT a Devise session.
+  get "coach/game_state", to: "coach_game_states#show"
+
   resources :games, only: %i[index show create] do
     member do
       patch :move      # persist a played move (FEN/PGN update)
