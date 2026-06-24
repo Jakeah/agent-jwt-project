@@ -106,34 +106,23 @@ start_agent coach:
             go_to_off_topic: @utils.transition to @subagent.off_topic
             go_to_ambiguous_question: @utils.transition to @subagent.ambiguous_question
             # ============================================================================
-            # ⚠️ DO NOT PUBLISH THIS BUNDLE FROM SOURCE TO ACTIVATE THE MCP ACTIONS.
-            # The 4 mcpTool:// actions below are an ACCURATE TRANSCRIPTION of the working
-            # builder version (Chess_Coach_MCP_v4) — kept here as reference/documentation.
-            # BUT: source-publishing them produces actions that VALIDATE and carry correct
-            # tool-record IDs in metadata YET ARE NOT INVOKED by the planner (proven 2026-06-24:
-            # source-published v5 deflected every chess utterance to ambiguous/off_topic, while
-            # builder v4 fired the same utterances correctly). The builder performs a binding step
-            # that a source publish does not. THE BUILDER IS THE SOURCE OF TRUTH for this agent;
-            # the activated, working version is v4. To change MCP actions, edit in the builder.
-            # See skill ref mcp-tool-actions.md §8.  NOTE: the naming guardrail added to the
-            # instructions above is NOT yet live on the MCP agent — v4 predates it. To apply it,
-            # paste that paragraph into the coach subagent's instructions in the BUILDER, then
-            # Save→Commit→Activate (do NOT source-publish this file — see warning above).
-            # --- native MCP engine tools (transcribed from builder v4) ---
-            # Inputs left unbound so the planner fills them from context (Chess_FEN or what the
-            # player gives in chat) — same pattern as the production Apex Coach.
-            analyze_fen: @actions.analyze_fen
-                with fen = ...
-                with depth = ...
-            best_move: @actions.best_move
-                with fen = ...
-                with depth = ...
-            explain_move: @actions.explain_move
-                with fen = ...
-                with move = ...
-                with depth = ...
-            name_opening: @actions.name_opening
-                with moves = ...
+            # MCP ACTION SLOT — the 4 ChessMCP tools (analyze_fen, best_move, explain_move,
+            # name_opening) are added to this subagent IN THE BUILDER, not here.
+            #
+            # ⚠️ DO NOT add the mcpTool:// actions to this source file and `publish
+            # authoring-bundle`. A source publish OVERWRITES the builder's working draft and
+            # POISONS the lineage: the source-style action definitions validate and carry correct
+            # tool IDs but are NOT invoked by the planner — the agent then deflects every chess
+            # utterance to off_topic/ambiguous. Proven 2026-06-24 (v5 source publish → v6/v7 builder
+            # edits on the poisoned baseline all deflected; pure-builder v4 fired 5/5). See skill ref
+            # mcp-tool-actions.md §8.
+            #
+            # THE BUILDER IS THE SOURCE OF TRUTH for this agent. The canonical mcpTool:// bindings
+            # (source:/target:/inputs) are preserved as reference in the committed, last-known-good
+            # builder version: genAiPlannerBundles/Chess_Coach_MCP_v4/agentScript/ (base64-decode it).
+            # The naming guardrail in the instructions above is NOT yet live on v4 — apply it by
+            # editing the coach subagent's instructions in the BUILDER, then Save→Commit→Activate.
+            # ============================================================================
 
     # Action definitions — backing logic + I/O.
     actions:
@@ -147,98 +136,18 @@ start_agent coach:
                 firstName: string
                     description: "Player's first name"
                     is_displayable: False
-        # --- native MCP engine tools ---
-        # Backfilled from the activated builder version (Chess_Coach_MCP_v4) — these are the exact
-        # bindings the platform wrote: `source:` is the per-org GenAiFunction DeveloperName, `target:`
-        # is mcpTool://mcptool__<tool> with `_` hex-escaped as `x5f`. Input `label:` values come from
-        # the MCP tool schema's per-property `title` (no outputs block — MCP responses flow back to
-        # reasoning). See skill ref mcp-tool-actions.md. NOTE: `source:`/`target:` are ORG-SPECIFIC —
-        # not portable to another org (regenerate per org via the builder).
-        analyze_fen:
-            description: |
-                Evaluate a chess position given as FEN. Returns the engine evaluation (White's perspective) and the best continuation.
-            label: "analyze_fen - ChessMCP"
-            require_user_confirmation: False
-            include_in_progress_indicator: False
-            source: "ac87fbaba830738a5a8426570d3b2998d"
-            target: "mcpTool://mcptoolx5fx5fanalyzex5ffen"
-            inputs:
-                "fen": string
-                    description: |
-                      Position in Forsyth-Edwards Notation
-                    label: "FEN Position"
-                    is_required: True
-                    is_user_input: False
-                "depth": integer
-                    description: |
-                      Search depth (default 14)
-                    label: "Search Depth"
-                    is_required: False
-                    is_user_input: False
-        best_move:
-            description: |
-                Return the engine's best move for a position (FEN), in both SAN and UCI.
-            label: "best_move - ChessMCP"
-            require_user_confirmation: False
-            include_in_progress_indicator: False
-            source: "a01f925b1425e355c808d5546c4a23d29"
-            target: "mcpTool://mcptoolx5fx5fbestx5fmove"
-            inputs:
-                "fen": string
-                    description: |
-                      Position in FEN
-                    label: "FEN Position"
-                    is_required: True
-                    is_user_input: False
-                "depth": integer
-                    description: |
-                      Search depth (default 14)
-                    label: "Search Depth"
-                    is_required: False
-                    is_user_input: False
-        explain_move:
-            description: |
-                Judge a move played from a position. Compares the played move to the engine's best and reports the evaluation swing so you can explain whether it was good, inaccurate, or a blunder.
-            label: "explain_move - ChessMCP"
-            require_user_confirmation: False
-            include_in_progress_indicator: False
-            source: "ae85c69cebea2380aa530fdb350022cdb"
-            target: "mcpTool://mcptoolx5fx5fexplainx5fmove"
-            inputs:
-                "fen": string
-                    description: |
-                      Position BEFORE the move, in FEN
-                    label: "FEN Position"
-                    is_required: True
-                    is_user_input: False
-                "move": string
-                    description: |
-                      The move that was played, in SAN (e.g. 'Nf3') or UCI (e.g. 'g1f3')
-                    label: "Move Played"
-                    is_required: True
-                    is_user_input: False
-                "depth": integer
-                    description: |
-                      Search depth (default 14)
-                    label: "Search Depth"
-                    is_required: False
-                    is_user_input: False
-        name_opening:
-            description: |
-                Name the chess opening from a sequence of moves in SAN.
-            label: "name_opening - ChessMCP"
-            require_user_confirmation: False
-            include_in_progress_indicator: False
-            source: "a133e570ebcdc3216a2006b763f58057f"
-            target: "mcpTool://mcptoolx5fx5fnamex5fopening"
-            inputs:
-                "moves": list[object]
-                    description: |
-                      Moves in SAN order, e.g. ['e4','e5','Nf3','Nc6','Bb5']
-                    label: "Moves (SAN)"
-                    is_required: True
-                    is_user_input: False
-                    complex_data_type_name: "lightning__textType"
+        # --- native MCP engine tools: DEFINED IN THE BUILDER, NOT HERE ---
+        # The 4 mcpTool:// actions (analyze_fen, best_move, explain_move, name_opening) are added to the
+        # coach subagent IN THE BUILDER. They are intentionally NOT defined in this file — see the big
+        # warning in the reasoning `actions:` block above and skill ref mcp-tool-actions.md §8: source-
+        # publishing mcpTool:// definitions overwrites the builder draft and poisons the lineage (the
+        # actions stop being offered to the planner, so the agent deflects everything to off_topic).
+        #
+        # The canonical bindings (source:/target:/inputs, incl. the titled labels and the
+        # moves:list[object] + lightning__textType array mapping) are preserved for reference in the
+        # committed last-known-good builder version:
+        #   genAiPlannerBundles/Chess_Coach_MCP_v4/agentScript/Chess_Coach_MCP_v4_definition.agent
+        # (base64-decode it). To change MCP actions, edit in the builder → Save → Commit → Activate.
 
 subagent off_topic:
     label: "Off Topic"

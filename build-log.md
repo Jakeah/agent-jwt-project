@@ -1185,3 +1185,32 @@ builder/activation-bound, not source-publish-bound (compounds: drafts not retrie
 preview can't fire MCP; now: source publish can't bind MCP).
 
 Production Chess_Coach (v6, Apex + naming guardrail) is unaffected and fully working.
+
+## 2026-06-24 — ROOT CAUSE FOUND (from reasoning trace): source publish poisons MCP binding
+
+The MCP agent deflecting to off_topic was NOT the guardrail, descriptions, context, or non-determinism.
+The builder Preview reasoning trace settled it. On the failing turn, the coach topic's planner was
+handed the standard "you MUST use a tool, NEVER use general knowledge" protocol — but the ONLY tools in
+its available list were `go_to_ambiguous_question` and `go_to_off_topic`. The 4 MCP engine tools were
+NOT offered to the planner at all. So, ordered to call a tool and having only the two transition tools,
+it called both → routed to off_topic. It never "chose" off_topic over analyze_fen; analyze_fen wasn't on
+the menu.
+
+Why the tools weren't on the menu: source-publish contamination. Decoding the activated bundles:
+  - v4 (pure builder): 4 mcpTool targets, ZERO hand-authored comments → tools offered → fires 5/5.
+  - v7 (and v5/v6): contains my SOURCE FILE's action-definition blocks verbatim, including the
+    "Backfilled from the activated builder" comment → tools present in metadata but NOT presented to
+    the planner → deflects 0/5.
+`sf agent publish authoring-bundle` OVERWROTE the builder's working draft with my .agent file, and every
+builder version built afterward (v6, v7) inherited the poisoned baseline. (This is the §8 finding, now
+proven at the planner level, not just inferred from behavior.)
+
+FIX: rolled active version back to v4 (pure builder) → fires 5/5, confirmed. Made the SOURCE FILE safe so
+it can never re-poison: removed the mcpTool:// action references + definitions, restored the MCP-ACTION-
+SLOT note with a loud do-not-source-publish warning, and pointed to the committed v4 agentScript as the
+canonical binding reference. Source validates. Skill ref §8 rewritten: "source publish is not inert for
+MCP — it is actively destructive (overwrites builder draft, poisons lineage)."
+
+STILL OPEN: the naming guardrail is NOT on the MCP agent (v4 predates it). Must be added in the BUILDER
+forward from v4 (edit coach instructions → Save→Commit→Activate), NEVER via source publish. Lower priority
+— prod Chess_Coach (v6) has the guardrail and is the demo agent; the MCP agent is the experiment/reference.
