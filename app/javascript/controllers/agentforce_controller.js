@@ -6,16 +6,32 @@ import { gameStateForPrechat } from "game_state";
 // so by the time this runs we know there's a Devise session backing /identity_token.
 //
 // Lifecycle (all MIAW events fire on window):
-//   1. connect()                         → inject the deployment bootstrap script.
+//   1. connect()                         → inject the deployment bootstrap script (MIAW mode only).
 //   2. onEmbeddedMessagingReady          → mint a JWT, setIdentityToken, seed hidden prechat
-//                                          fields from the live board (game context).
+//                                          fields + push live session context.
 //   3. onEmbeddedMessagingIdentityTokenExpired → re-mint + setIdentityToken within 30s, or the
 //                                          verified session is dropped.
 //   4. Sign-out (a [data-agentforce-target="signout"] button) → clearSession to end it.
 //
+// Two distinct ways game state reaches the agent, because MIAW treats them differently:
+//   • setHiddenPrechatFields  — consumed ONLY at conversation creation. Re-seeding keeps a chat
+//                               *opened* mid-game correct, but does nothing to a running one.
+//   • utilAPI.setSessionContext — Context Events API; pushes context into an ALREADY-OPEN
+//                               conversation, so the coach sees the live position on the next
+//                               turn (the fix for "the coach is stuck on the opening snapshot").
+//                               Eng-flagged as brittle on rapid-fire calls, so we debounce.
+//
+// Coach-mode toggle: the game page lets the user switch between the Apex coach (MIAW, this
+// controller) and the MCP coach (headless Agent API, agent_chat_controller). We only boot MIAW
+// in "miaw" mode so the headless path runs clean with no stray widget. The toggle persists the
+// mode in localStorage and reloads, so each load sets up exactly one path.
+//
 // Config (org id, deployment dev name, ESW site URL, SCRT2 URL, the /identity_token deployment
 // key) is passed in as Stimulus values from the registry — no Salesforce specifics hardcoded
 // here, so SOMA/MOMA stays a config change.
+const COACH_MODE_KEY = "coachMode";
+const CONTEXT_DEBOUNCE_MS = 400; // collapse a flurry of moves into one settled setSessionContext
+
 export default class extends Controller {
   static values = {
     orgId: String,
@@ -31,23 +47,38 @@ export default class extends Controller {
     // Bind once so add/removeEventListener see the same references.
     this.onReady = this.handleReady.bind(this);
     this.onTokenExpired = this.handleTokenExpired.bind(this);
-    this.onGameStateChanged = this.seedGameContext.bind(this);
+    this.onGameStateChanged = this.handleGameStateChanged.bind(this);
 
     window.addEventListener("onEmbeddedMessagingReady", this.onReady);
     window.addEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
-    // Re-seed hidden prechat fields whenever the board changes, so a chat opened mid-game starts
-    // with the live position (MIAW captures these at conversation start). Guarded by isReady so we
-    // don't call the prechat API before the widget exists.
+    // React to board changes: re-seed prechat (helps a chat opened later) AND push live context
+    // into an open conversation (the mid-game freshness fix). Both guard on isReady internally.
     window.addEventListener("chess:state-changed", this.onGameStateChanged);
 
     this.isReady = false;
-    this.loadBootstrap();
+    this.contextTimer = null;
+
+    // Only stand up MIAW when the user has the Apex coach selected. In headless mode the MCP
+    // coach owns the page and we leave the widget entirely out of the DOM.
+    if (this.coachMode() === "miaw") {
+      this.loadBootstrap();
+    }
   }
 
   disconnect() {
     window.removeEventListener("onEmbeddedMessagingReady", this.onReady);
     window.removeEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
     window.removeEventListener("chess:state-changed", this.onGameStateChanged);
+    if (this.contextTimer) clearTimeout(this.contextTimer);
+  }
+
+  // Current coach mode from localStorage; defaults to the verified MIAW path.
+  coachMode() {
+    try {
+      return window.localStorage.getItem(COACH_MODE_KEY) || "miaw";
+    } catch {
+      return "miaw"; // localStorage can throw in private-mode/sandboxed contexts
+    }
   }
 
   // --- 1. Inject the MIAW bootstrap script (idempotent across Turbo navigations) ---
@@ -83,6 +114,7 @@ export default class extends Controller {
     this.isReady = true;
     await this.setIdentityToken();
     this.seedGameContext();
+    this.pushLiveContext(); // push current board straight away so the first turn is live
   }
 
   async setIdentityToken() {
@@ -105,8 +137,16 @@ export default class extends Controller {
     }
   }
 
+  // Board changed → keep both context channels current. Prechat re-seed is immediate (cheap,
+  // only matters at next conversation start); the live-context push is debounced because the
+  // Context Events API is not guaranteed to settle under rapid-fire calls (eng-flagged).
+  handleGameStateChanged() {
+    this.seedGameContext();
+    this.scheduleLiveContextPush();
+  }
+
   // Push the current board into hidden prechat fields → conversation variables the coach reads.
-  // Must run after ready and before the conversation begins.
+  // Consumed only at conversation creation, so this keeps a chat OPENED mid-game correct.
   seedGameContext() {
     if (!this.isReady) return; // widget not up yet; handleReady will seed once it is
     try {
@@ -116,6 +156,35 @@ export default class extends Controller {
       }
     } catch (err) {
       console.error("[agentforce] failed to seed game context:", err);
+    }
+  }
+
+  // Debounce the live-context push so a burst of moves collapses to one settled call.
+  scheduleLiveContextPush() {
+    if (this.contextTimer) clearTimeout(this.contextTimer);
+    this.contextTimer = setTimeout(() => {
+      this.contextTimer = null;
+      this.pushLiveContext();
+    }, CONTEXT_DEBOUNCE_MS);
+  }
+
+  // Push the live board into the OPEN conversation via the Context Events API, so the coach
+  // reasons about the current position on its next turn — not the chat-open snapshot. Sent as a
+  // structured _AgentContext value carrying the same keys the agent already reads from prechat.
+  pushLiveContext() {
+    if (!this.isReady) return;
+    try {
+      const util = window.embeddedservice_bootstrap?.utilAPI;
+      if (util && typeof util.setSessionContext === "function") {
+        util.setSessionContext([
+          {
+            name: "_AgentContext",
+            value: { valueType: "StructuredValue", value: gameStateForPrechat() },
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error("[agentforce] failed to push live session context:", err);
     }
   }
 
