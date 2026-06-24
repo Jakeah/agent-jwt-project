@@ -14,7 +14,26 @@ const state = {
   moveCount: 0,       // full moves played
   lastEval: null,     // { scoreCp, mate } from the engine, White's perspective
   status: "active",
+  // Opponent strength the headless coach mentions ("vs a ~1200 engine"). Defaulted from the
+  // engine's search depth for now; the upcoming chess.com-Elo selector will set this directly
+  // (Stockfish UCI_LimitStrength/UCI_Elo). { label, elo } — elo is approximate.
+  difficulty: { label: "Intermediate", elo: 1200 },
 };
+
+// Rough search-depth → playing-strength mapping, until the Elo selector lands. Stockfish at low
+// fixed depth plays far below its ceiling; these are deliberately modest, demo-friendly numbers.
+const DEPTH_TO_DIFFICULTY = [
+  { maxDepth: 4, label: "Beginner", elo: 600 },
+  { maxDepth: 8, label: "Casual", elo: 900 },
+  { maxDepth: 12, label: "Intermediate", elo: 1200 },
+  { maxDepth: 16, label: "Advanced", elo: 1600 },
+];
+
+export function difficultyForDepth(depth) {
+  const tier = DEPTH_TO_DIFFICULTY.find((t) => depth <= t.maxDepth);
+  const { label, elo } = tier || { label: "Expert", elo: 2000 };
+  return { label, elo };
+}
 
 export function updateGameState(patch) {
   Object.assign(state, patch);

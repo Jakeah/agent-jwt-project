@@ -6,12 +6,41 @@
     <%= link_to "← All games", games_path, class: "text-slate-500 hover:underline" %>
   </div>
 
-  <%# Phase 2 mounts the chessboard + Stockfish analysis onto this element. %>
-  <div data-controller="chess"
-       data-chess-game-id-value="<%= @game.id %>"
-       data-chess-fen-value="<%= @game.fen %>"
-       data-chess-move-url-value="<%= move_game_path(@game) %>"
-       data-chess-finish-url-value="<%= finish_game_path(@game) %>">
-    <p class="text-slate-500">Loading board…</p>
+  <%# Coach-mode toggle: pick which implementation path coaches this game. Persisted in
+      localStorage by the coach_toggle controller, which reloads so exactly one path wires up.
+      - Apex Coach (MIAW): the embedded widget (reactive Q&A, verified identity) — injected by the
+        agentforce controller in the layout, which self-gates on this same mode.
+      - MCP Coach (Headless): the custom panel below, driven by the Agentforce Agent API. %>
+  <div data-controller="coach-toggle" class="mb-4">
+    <span class="text-xs uppercase tracking-wide text-slate-400 mr-2">Coach</span>
+    <div class="inline-flex rounded-lg border border-slate-200 overflow-hidden text-sm">
+      <button type="button" data-coach-toggle-target="button" data-mode="miaw"
+              data-action="click->coach-toggle#select"
+              class="px-3 py-1.5 font-medium">Apex Coach (MIAW)</button>
+      <button type="button" data-coach-toggle-target="button" data-mode="headless"
+              data-action="click->coach-toggle#select"
+              class="px-3 py-1.5 font-medium border-l border-slate-200">MCP Coach (Headless)</button>
+    </div>
+  </div>
+
+  <div class="flex flex-col lg:flex-row gap-6 items-start">
+    <%# Phase 2 mounts the chessboard + Stockfish analysis onto this element. %>
+    <div data-controller="chess"
+         data-chess-game-id-value="<%= @game.id %>"
+         data-chess-fen-value="<%= @game.fen %>"
+         data-chess-move-url-value="<%= move_game_path(@game) %>"
+         data-chess-finish-url-value="<%= finish_game_path(@game) %>">
+      <p class="text-slate-500">Loading board…</p>
+    </div>
+
+    <%# Headless MCP coach panel. Self-gates on coach mode (hidden unless "headless" is selected),
+        so it never competes with the embedded MIAW widget. Renders its own chat UI in JS. %>
+    <div class="w-full lg:w-96"
+         data-controller="agent-chat"
+         data-agent-chat-game-id-value="<%= @game.id %>"
+         data-agent-chat-create-url-value="<%= game_agent_chat_path(@game) %>"
+         data-agent-chat-message-url-value="<%= message_game_agent_chat_path(@game) %>"
+         data-agent-chat-destroy-url-value="<%= game_agent_chat_path(@game) %>"
+         hidden></div>
   </div>
 </div>

@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { Chess } from "chess.js";
 import { Engine } from "engine";
-import { updateGameState } from "game_state";
+import { updateGameState, difficultyForDepth } from "game_state";
 import { PIECE_SVG } from "pieces";
 
 // Full piece names, for spelling a move out loud ("Knight to f3").
@@ -51,8 +51,11 @@ export default class extends Controller {
     this.selected = null;   // currently selected square, e.g. "e2"
     this.legalTargets = [];
     this.thinking = false;
+    // Opponent strength derived from search depth (until the Elo selector lands). Published in
+    // the shared snapshot so the headless coach can say "vs a ~1200 engine".
+    this.difficulty = difficultyForDepth(this.depthValue);
     this.#render();
-    this.#publishState();
+    this.#publishState({ difficulty: this.difficulty });
     this.#analyze();
   }
 
@@ -102,15 +105,36 @@ export default class extends Controller {
     this.thinking = true;
     this.#setStatus("Computer is thinking…");
     this.engine.bestMove(this.chess.fen(), { depth: this.depthValue }).then((mv) => {
+      let reply = null;
       if (mv) {
-        const reply = this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+        reply = this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
         if (reply) this.lastMove = reply;
       }
       this.thinking = false;
       this.#render();
       this.#persist();
+      // Announce the completed turn (player move + computer reply) so the headless MCP coach can
+      // auto-comment. chess.js verbose moves carry .before/.after FENs, .san, .color.
+      this.#announceTurn(move, reply);
       if (!this.#checkGameOver()) this.#analyze();
     });
+  }
+
+  // Dispatch a completed-turn event the headless coach panel listens for. Player-move-only
+  // cadence: one event per player action, carrying the computer's reply as context. The MIAW
+  // path ignores this (it reacts to chat messages, not board events).
+  #announceTurn(playerMove, computerMove) {
+    if (!playerMove) return;
+    window.dispatchEvent(new CustomEvent("chess:turn-complete", {
+      detail: {
+        gameId: this.gameIdValue,
+        playerMove: { san: playerMove.san, fenBefore: playerMove.before },
+        computerMove: computerMove
+          ? { san: computerMove.san, fenAfter: computerMove.after }
+          : null,
+        difficulty: this.difficulty,
+      },
+    }));
   }
 
   #analyze() {
