@@ -118,31 +118,68 @@ export default class extends Controller {
     }
   }
 
-  // --- 1. Inject the MIAW bootstrap script (idempotent across Turbo navigations) ---
+  // --- 1. Inject the MIAW bootstrap script — EXACTLY ONCE per window ---
+  // Turbo makes "load once" subtle: on each navigation Turbo swaps <body>, discarding the
+  // <script id="esw-bootstrap"> we appended — but `window` (and `window.embeddedservice_bootstrap`
+  // once it loads) PERSISTS. So the old guard (check for the element OR the async global) failed: a
+  // fast list→game Turbo nav re-ran connect() before the first script finished loading, the element
+  // was already gone, the global wasn't set yet → we injected a SECOND bootstrap and called
+  // boot.init() twice. Two bootstraps corrupt each other ("Cannot read properties of undefined" in
+  // bootstrap.min.js) and the second init RESETS the prechat buffer — so the conversation opens with
+  // Chess_FEN__c null even though setHiddenPrechatFields ran with the right FEN. (This is the actual
+  // cause of the intermittent null: a full page load = one init = FEN lands; a Turbo nav = double
+  // init = FEN lost.) Fix: track injection + init on `window`, the only thing that outlives Turbo.
   loadBootstrap() {
-    if (window.embeddedservice_bootstrap || document.getElementById("esw-bootstrap")) {
-      // Already loaded this page session — just (re)initialize for the verified user.
-      dlog("loadBootstrap: bootstrap already present → re-init", { bootstrapExists: !!window.embeddedservice_bootstrap });
-      if (window.embeddedservice_bootstrap) this.initEmbeddedMessaging();
+    if (window.__eswBootstrapInjected) {
+      dlog("loadBootstrap: already injected this window → no-op", {
+        apiUp: !!window.embeddedservice_bootstrap,
+        initialized: !!window.__eswInitialized,
+      });
+      // If the script loaded under a previous controller instance but init hasn't run, run it once.
+      if (window.embeddedservice_bootstrap && !window.__eswInitialized) this.initEmbeddedMessaging();
       return;
     }
     dlog("loadBootstrap: injecting bootstrap script (first load this window)");
+    window.__eswBootstrapInjected = true;
+
+    // Stash the deployment config on window so init still works if this controller's element was
+    // swapped out by a Turbo nav before the async script finished loading (the onload below may
+    // fire after this instance is disconnected and its Stimulus values are no longer readable).
+    window.__eswConfig = {
+      orgId: this.orgIdValue,
+      deploymentName: this.deploymentNameValue,
+      siteUrl: this.siteUrlValue,
+      scrt2Url: this.scrt2UrlValue,
+      language: this.languageValue,
+    };
 
     const script = document.createElement("script");
     script.id = "esw-bootstrap";
     script.src = this.scriptUrlValue;
     script.onload = () => this.initEmbeddedMessaging();
-    script.onerror = () => console.error("[agentforce] failed to load MIAW bootstrap script");
+    script.onerror = () => {
+      window.__eswBootstrapInjected = false; // let a later connect retry
+      console.error("[agentforce] failed to load MIAW bootstrap script");
+    };
     document.body.appendChild(script);
   }
 
+  // Initialize the embedded messaging widget EXACTLY ONCE per window. A second boot.init() resets
+  // the prechat buffer (see loadBootstrap), so guard hard on the window flag.
   initEmbeddedMessaging() {
+    if (window.__eswInitialized) return dlog("initEmbeddedMessaging: already initialized → skip");
     try {
       const boot = window.embeddedservice_bootstrap;
-      boot.settings.language = this.languageValue;
-      boot.init(this.orgIdValue, this.deploymentNameValue, this.siteUrlValue, {
-        scrt2URL: this.scrt2UrlValue,
-      });
+      const cfg = window.__eswConfig || {};
+      boot.settings.language = cfg.language || this.languageValue;
+      boot.init(
+        cfg.orgId || this.orgIdValue,
+        cfg.deploymentName || this.deploymentNameValue,
+        cfg.siteUrl || this.siteUrlValue,
+        { scrt2URL: cfg.scrt2Url || this.scrt2UrlValue },
+      );
+      window.__eswInitialized = true;
+      dlog("initEmbeddedMessaging: boot.init() called (once)");
     } catch (err) {
       console.error("[agentforce] error initializing MIAW:", err);
     }
