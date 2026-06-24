@@ -170,12 +170,25 @@ the checkbox only sets `authMode=Auth`; the real link is the AuthScheme, and it 
 metadata (not in the channel XML, no queryable SObject) — it's created/activated in the **Messaging
 Settings UI**.
 
-**FIX (Setup, UI — confirm exact labels in-org, they shift by release):**
-- Setup → **Messaging Settings** → the channel (`Chess_Coach_Web`) → **User Verification** section.
-- Add an **Authorization Method / AuthScheme** that references the **JSON Web Keyset**
-  (`Chess_Identity_Keyset`), and **Activate** it (the error says "no *active* AuthSchemes" — creating
-  one isn't enough; it must be active).
-- Republish the Embedded Service Deployment; hard-refresh.
+**FIX (Setup, UI — confirmed in-org 2026-06-24):**
+- Setup → **Messaging Settings** → the channel (`Chess_Coach_Web`) → **User Verification** →
+  **Add User Verification Configuration** (this dialog IS the AuthScheme).
+- **Keyset** = `Chess_Identity_Keyset`; give it a **Configuration Name** (required — e.g.
+  `ChessVerification`; it becomes the AuthScheme label, shows up in the platform key as
+  `AUTH/<name>/uid:<sub>`); check **Active**. Save.
+- Republish the ESD is NOT required (the AuthScheme is runtime config SCRT2 reads per token
+  exchange); just **hard-refresh** the browser (the bootstrap/token were client-cached).
+- ✅ RESULT (verified live): the conversation flipped from `UNAUTH/NA/uid:<random-uuid>` to
+  `v2/iamessage/AUTH/ChessVerification/uid:player@example.com`. The JWT is now accepted.
+
+> **STILL OPEN after AUTH: `MessagingEndUser.ContactId` / `MessagingSession.EndUserContactId` is
+> NULL even though the verified uid (`player@example.com`) exactly matches a Contact's email.**
+> Verification (identity continuity) ≠ Contact resolution. Whether email→Contact linking is
+> automatic or needs an explicit step (an identity-matching setting, or a routing-flow Get Contact
+> → set EndUserContactId) is UNCONFIRMED — every prior conversation was UNAUTH, so this hop has
+> never actually run before. The agent's by-name greeting depends on `@MessagingEndUser.ContactId`,
+> so it won't personalize until this resolves. TBD — do not assume the old "ContactId populated"
+> note was ever true.
 
 **Diagnostic that nails it:** read the SCRT2 `accessToken` response body in the browser Network tab.
 "no active AuthSchemes" = this section; a signature/claim message = the token; a 304 + stale token =
