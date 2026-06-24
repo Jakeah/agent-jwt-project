@@ -149,6 +149,38 @@ Retrieve to verify: `sf project retrieve start --metadata "PublicKeyCertificateS
 this was confirmed correct in-org 2026-06-24 (issuer byte-matches; key pair's modulus matches
 Heroku's signing key) — yet conversations still bound UNAUTH, which pointed to the client, below.
 
+### ⚠️⚠️ THE ACTUAL LINK: an **active AuthScheme** ties the keyset to the channel (root cause, 2026-06-24)
+The widget error "Something went wrong, please log in and try again" was NOT a token problem — the
+JWT was never even evaluated. The SCRT2 `accessToken` request (DevTools → Network, the red request
+to `*.salesforce-scrt.com`) returned:
+
+```
+{"message":"User verification configuration has no active AuthSchemes."}
+```
+
+**Meaning:** the channel has verification turned ON (`authMode=Auth`), and the JWKS keyset
+(`PublicKeyCertificateSet` + cert) exists and is correct — but **nothing links them.** The binding
+is a separate record Salesforce calls an **AuthScheme** (the "Authorization Method" under User
+Verification in Messaging Settings). Without an **active** AuthScheme referencing the keyset, every
+token exchange fails BEFORE the signature is checked. This is why all the crypto checks (key pair,
+x5c, issuer byte-match) were correct yet useless — they were never reached.
+
+**This supersedes the earlier "the checkbox is the binding" and "no channel→keyset reference" notes:**
+the checkbox only sets `authMode=Auth`; the real link is the AuthScheme, and it is NOT deployable
+metadata (not in the channel XML, no queryable SObject) — it's created/activated in the **Messaging
+Settings UI**.
+
+**FIX (Setup, UI — confirm exact labels in-org, they shift by release):**
+- Setup → **Messaging Settings** → the channel (`Chess_Coach_Web`) → **User Verification** section.
+- Add an **Authorization Method / AuthScheme** that references the **JSON Web Keyset**
+  (`Chess_Identity_Keyset`), and **Activate** it (the error says "no *active* AuthSchemes" — creating
+  one isn't enough; it must be active).
+- Republish the Embedded Service Deployment; hard-refresh.
+
+**Diagnostic that nails it:** read the SCRT2 `accessToken` response body in the browser Network tab.
+"no active AuthSchemes" = this section; a signature/claim message = the token; a 304 + stale token =
+the caching bug below.
+
 ### ⚠️ A correct keyset is necessary but NOT sufficient — the TOKEN ENDPOINT must not be HTTP-cached
 Conversations can STILL bind `UNAUTH` / the widget can show **"Something went wrong, please log in
 and try again"** with every static config correct (issuer byte-matches, cert active, x5c present, key
