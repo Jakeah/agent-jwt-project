@@ -1155,3 +1155,33 @@ would not invent an evaluation."
   be v5) is held to avoid risking the builder linkage during a wording fix. Source is updated + ready;
   builder v4 remains the activated MCP version. To ship the MCP wording fix without the source-publish
   risk, paste the instruction line in the builder → Save→Commit→Activate.
+
+## 2026-06-24 — source-published MCP actions VALIDATE but DON'T FIRE (rolled back to builder v4)
+
+Tried to finish Chess_Coach_MCP from source: backfilled the 4 native MCP action blocks (exact
+source:/target:/inputs from the decoded builder v4) + added the naming guardrail, validated clean,
+published + activated = v5. v5's planner-bundle metadata looked GREAT — all 4 mcpTool actions with
+correct 1XOg… tool-record invocationTargets AND clean developer names (analyze_fen/best_move/etc.,
+nicer than the builder's hash names).
+
+BUT v5 doesn't work: every chess utterance deflected to ambiguous_question / off_topic, and the MCP
+server logs showed NO /mcp call. Isolation (head-to-head, same org/server/utterances):
+  - builder v4  → fires (Qxf7# + "Scholar's Mate", real /mcp call)
+  - source v5   → deflects, no /mcp call
+  - prod v6 (same guardrail, Apex actions) → fires → guardrail exonerated
+  - re-activated v4 after all the re-syncing → still fires → registration re-sync exonerated
+So the ONLY variable is builder-add vs. source-publish of the MCP actions. Conclusion: the builder
+does a binding/registration step for mcpTool:// actions that `publish authoring-bundle` does NOT —
+correct metadata + tool IDs are necessary but not sufficient; the planner won't invoke them.
+
+Recovery: `sf agent activate --api-name Chess_Coach_MCP --version 4` → experiment agent working again
+(v4 active). Source file keeps the backfilled bindings as REFERENCE (accurate transcription of v4) but
+now carries a loud ⚠️ DO-NOT-SOURCE-PUBLISH warning block + the note that the naming guardrail is NOT
+yet live on the MCP agent (v4 predates it; apply via builder if wanted). Lesson promoted to skill ref
+mcp-tool-actions.md §8.
+
+Net: builder is the source of truth for any MCP-using subagent. The whole MCP action lifecycle is
+builder/activation-bound, not source-publish-bound (compounds: drafts not retrievable; authoring-bundle
+preview can't fire MCP; now: source publish can't bind MCP).
+
+Production Chess_Coach (v6, Apex + naming guardrail) is unaffected and fully working.
