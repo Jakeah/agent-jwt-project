@@ -24,35 +24,40 @@ const asText = (obj) => ({ content: [{ type: "text", text: JSON.stringify(obj) }
 function buildServer() {
   const server = new McpServer({ name: "chess-mcp", version: "0.1.0" });
 
+  // Each param carries .meta({ title, description }). In zod v4 .describe() is sugar for
+  // .meta({description}); folding title in alongside it emits a JSON-schema `title` per property.
+  // EXPERIMENT (2026-06-24): Agentforce stamps `label: "string"` on every MCP-action input when the
+  // tool schema has no `title`. Adding titles here is the server-side attempt to make the platform
+  // surface a real `label:` instead of the placeholder. See skill ref mcp-tool-actions.md §5.
   server.tool(
     "analyze_fen",
     "Evaluate a chess position given as FEN. Returns the engine evaluation (White's perspective) and the best continuation.",
-    { fen: z.string().describe("Position in Forsyth-Edwards Notation"),
-      depth: z.number().int().min(4).max(20).optional().describe("Search depth (default 14)") },
+    { fen: z.string().meta({ title: "FEN Position", description: "Position in Forsyth-Edwards Notation" }),
+      depth: z.number().int().min(4).max(20).optional().meta({ title: "Search Depth", description: "Search depth (default 14)" }) },
     async (args) => asText(await analyzeFen(args))
   );
 
   server.tool(
     "best_move",
     "Return the engine's best move for a position (FEN), in both SAN and UCI.",
-    { fen: z.string().describe("Position in FEN"),
-      depth: z.number().int().min(4).max(20).optional() },
+    { fen: z.string().meta({ title: "FEN Position", description: "Position in FEN" }),
+      depth: z.number().int().min(4).max(20).optional().meta({ title: "Search Depth", description: "Search depth (default 14)" }) },
     async (args) => asText(await bestMove(args))
   );
 
   server.tool(
     "explain_move",
     "Judge a move played from a position. Compares the played move to the engine's best and reports the evaluation swing so you can explain whether it was good, inaccurate, or a blunder.",
-    { fen: z.string().describe("Position BEFORE the move, in FEN"),
-      move: z.string().describe("The move that was played, in SAN (e.g. 'Nf3') or UCI (e.g. 'g1f3')"),
-      depth: z.number().int().min(4).max(20).optional() },
+    { fen: z.string().meta({ title: "FEN Position", description: "Position BEFORE the move, in FEN" }),
+      move: z.string().meta({ title: "Move Played", description: "The move that was played, in SAN (e.g. 'Nf3') or UCI (e.g. 'g1f3')" }),
+      depth: z.number().int().min(4).max(20).optional().meta({ title: "Search Depth", description: "Search depth (default 14)" }) },
     async (args) => asText(await explainMove(args))
   );
 
   server.tool(
     "name_opening",
     "Name the chess opening from a sequence of moves in SAN.",
-    { moves: z.array(z.string()).describe("Moves in SAN order, e.g. ['e4','e5','Nf3','Nc6','Bb5']") },
+    { moves: z.array(z.string()).meta({ title: "Moves (SAN)", description: "Moves in SAN order, e.g. ['e4','e5','Nf3','Nc6','Bb5']" }) },
     async (args) => asText(nameOpeningTool(args))
   );
 
