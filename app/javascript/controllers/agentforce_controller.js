@@ -279,14 +279,26 @@ export default class extends Controller {
   // --- 4. Sign-out → end the verified session before the Devise session is destroyed ---
   // Wired via data-action on the sign-out button (see layout). Best-effort + synchronous so it
   // runs before navigation.
-  endSession(event) {
+  async endSession(event) {
+    if (this.sessionCleared) return; // resubmit after a completed clear — let the form submit now
+    const api = window.embeddedservice_bootstrap?.userVerificationAPI;
+    if (typeof api?.clearSession !== "function") return; // nothing to clear; let sign-out proceed
+
+    // clearSession is async (it ends the conversation server-side over the network). The sign-out
+    // form would otherwise submit and tear down the page before that request lands, leaving the
+    // verified conversation ALIVE — which then resumes on the next login (continuity), pinning the
+    // user to the old agent version and stale state. So: hold the form, await the clear, then submit.
+    // Without this, ending a verified conversation from the app is effectively impossible.
+    event.preventDefault();
+    const form = event.target.closest("form");
     try {
-      window.embeddedservice_bootstrap?.userVerificationAPI?.clearSession({
-        shouldEndSession: true,
-      });
+      await api.clearSession({ shouldEndSession: true });
     } catch (err) {
       console.error("[agentforce] failed to clear session:", err);
+    } finally {
+      this.sessionCleared = true; // guard against re-entry when we resubmit
+      window.__eswInitialized = false; // a new login should re-init a fresh widget
+      form?.requestSubmit ? form.requestSubmit() : form?.submit();
     }
-    // Don't block the actual sign-out POST — let the button proceed.
   }
 }
