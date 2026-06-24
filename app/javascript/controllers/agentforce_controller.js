@@ -58,10 +58,9 @@ export default class extends Controller {
     window.addEventListener("onEmbeddedMessagingReady", this.onReady);
     window.addEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
     // React to board changes: re-seed prechat (helps a chat opened later) AND push live context
-    // into an open conversation (the mid-game freshness fix). Both guard on isReady internally.
+    // into an open conversation (the mid-game freshness fix). Both guard on isWidgetReady internally.
     window.addEventListener("chess:state-changed", this.onGameStateChanged);
 
-    this.isReady = false;
     this.contextTimer = null;
     this.remintTimes = []; // timestamps of recent re-mints, for the loop guard
     this.remintHalted = false;
@@ -71,6 +70,23 @@ export default class extends Controller {
     if (this.coachMode() === "miaw") {
       this.loadBootstrap();
     }
+
+    // CRITICAL (Turbo + persisted widget): the MIAW bootstrap loads ONCE and lives on `window`
+    // across Turbo navigations, so `onEmbeddedMessagingReady` fires only on the first page (often
+    // the games LIST, where there's no game). When we then Turbo-navigate to a game page, this
+    // controller reconnects but the ready event does NOT fire again — so we must seed from
+    // connect() if the widget is already up. Otherwise the prechat buffer stays empty and the
+    // conversation opens with no game state (Chess_FEN__c null → "I don't see any moves").
+    if (this.isWidgetReady()) {
+      this.seedGameContext();
+      this.pushLiveContext();
+    }
+  }
+
+  // The widget is usable once its prechat API exists — a reliable, per-page-independent signal
+  // (unlike onEmbeddedMessagingReady, which fires only once for a window-persisted bootstrap).
+  isWidgetReady() {
+    return typeof window.embeddedservice_bootstrap?.prechatAPI?.setHiddenPrechatFields === "function";
   }
 
   disconnect() {
@@ -118,8 +134,9 @@ export default class extends Controller {
   }
 
   // --- 2. Widget ready → verify the user, then seed the game context ---
+  // Fires once per window-persisted bootstrap (typically on the first page). On later Turbo
+  // navigations it won't fire again — connect() handles seeding for that case via isWidgetReady().
   async handleReady() {
-    this.isReady = true;
     await this.setIdentityToken();
     this.seedGameContext();
     this.pushLiveContext(); // push current board straight away so the first turn is live
@@ -156,13 +173,10 @@ export default class extends Controller {
   // Push the current board into hidden prechat fields → conversation variables the coach reads.
   // Consumed only at conversation creation, so this keeps a chat OPENED mid-game correct.
   seedGameContext() {
-    if (!this.isReady) return; // widget not up yet; handleReady will seed once it is
+    if (!this.isWidgetReady()) return; // prechat API not up yet; connect()/handleReady seed once it is
     if (!hasActiveGame()) return; // no game on this page → don't seed a blank/start position
     try {
-      const api = window.embeddedservice_bootstrap?.prechatAPI;
-      if (api && typeof api.setHiddenPrechatFields === "function") {
-        api.setHiddenPrechatFields(gameStateForPrechat());
-      }
+      window.embeddedservice_bootstrap.prechatAPI.setHiddenPrechatFields(gameStateForPrechat());
     } catch (err) {
       console.error("[agentforce] failed to seed game context:", err);
     }
@@ -181,7 +195,7 @@ export default class extends Controller {
   // reasons about the current position on its next turn — not the chat-open snapshot. Sent as a
   // structured _AgentContext value carrying the same keys the agent already reads from prechat.
   pushLiveContext() {
-    if (!this.isReady) return;
+    if (!this.isWidgetReady()) return;
     if (!hasActiveGame()) return; // nothing meaningful to push outside a game
     try {
       const util = window.embeddedservice_bootstrap?.utilAPI;
