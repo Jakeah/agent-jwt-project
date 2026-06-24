@@ -169,10 +169,60 @@ export default class extends Controller {
   // --- 2. Widget ready → verify the user, then seed the game context ---
   // Fires once per window-persisted bootstrap (typically on the first page). On later Turbo
   // navigations it won't fire again — connect() handles seeding for that case via isWidgetReady().
+  // ALSO re-fires after clearSession() (the reset path): the docs guarantee onEmbeddedMessagingReady
+  // re-fires once the API is ready for another conversation, which is our hook to re-verify, re-seed,
+  // and (if a reset was requested) launch a brand-new conversation.
   async handleReady() {
     await this.setIdentityToken();
     this.seedGameContext();
     this.pushLiveContext(); // push current board straight away so the first turn is live
+
+    // If this ready fired because the user asked to reset, open a fresh conversation now that we're
+    // re-verified + re-seeded. shouldStartNewConversation requires Enhanced Web Chat v2 and only
+    // takes effect when the prior conversation is in the ended state — which clearSession guarantees.
+    if (this.relaunchAfterReady) {
+      this.relaunchAfterReady = false;
+      this.launchFreshConversation();
+    }
+  }
+
+  // Open (maximize) the chat, starting a NEW conversation rather than resuming. shouldStartNewConversation
+  // is v2-only; on v1 it's ignored and the widget just opens (still fine — clearSession already ended
+  // the old conversation, so v1 will create a new one on next message anyway).
+  launchFreshConversation() {
+    const util = window.embeddedservice_bootstrap?.utilAPI;
+    if (typeof util?.launchChat !== "function") return;
+    try {
+      const p = util.launchChat({ shouldStartNewConversation: true });
+      if (p && typeof p.catch === "function") {
+        p.catch((err) => console.error("[agentforce] launchChat failed:", err));
+      }
+    } catch (err) {
+      console.error("[agentforce] launchChat threw:", err);
+    }
+  }
+
+  // --- Reset the coach: end the current (verified) conversation and start a fresh one IN PAGE ---
+  // The documented sequence (no sign-out, no new user): clearSession ends the verified session +
+  // clears all messaging data → the widget re-fires onEmbeddedMessagingReady → handleReady re-verifies
+  // (setIdentityToken) + re-seeds prechat → launchChat({shouldStartNewConversation:true}) opens a brand
+  // new conversation. This is the proper fix for the continuity trap: a fresh conversation re-consumes
+  // prechat AND binds to the current agent version, instead of resuming the stale pinned conversation.
+  // Wired to a "New conversation" button on the game page (MIAW mode).
+  async resetConversation(event) {
+    event?.preventDefault();
+    const api = window.embeddedservice_bootstrap?.userVerificationAPI;
+    if (typeof api?.clearSession !== "function") {
+      console.warn("[agentforce] reset unavailable — widget not ready");
+      return;
+    }
+    this.relaunchAfterReady = true; // handleReady (re-fired by clearSession) will launch the new convo
+    try {
+      await api.clearSession({ shouldEndSession: true });
+    } catch (err) {
+      this.relaunchAfterReady = false;
+      console.error("[agentforce] failed to reset conversation:", err);
+    }
   }
 
   async setIdentityToken() {

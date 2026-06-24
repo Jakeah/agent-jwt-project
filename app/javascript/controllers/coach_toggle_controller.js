@@ -12,7 +12,7 @@ import { Controller } from "@hotwired/stimulus";
 const COACH_MODE_KEY = "coachMode";
 
 export default class extends Controller {
-  static targets = ["button", "miawHint"];
+  static targets = ["button", "miawHint", "resetBtn"];
 
   connect() {
     this.#reflect();
@@ -52,9 +52,14 @@ export default class extends Controller {
       btn.setAttribute("aria-pressed", isActive ? "true" : "false");
     });
 
-    // In MIAW mode the headless panel stays hidden (it self-gates), so reveal the hint card.
-    this.miawHintTargets.forEach((el) => {
-      el.classList.toggle("hidden", active !== "miaw");
+    // In MIAW mode the headless panel stays hidden (it self-gates), so reveal the hint card and the
+    // "New chat" reset button (which talks to the agentforce/MIAW controller). The headless panel has
+    // its own session lifecycle, so neither belongs in headless mode.
+    const miaw = active === "miaw";
+    this.miawHintTargets.forEach((el) => el.classList.toggle("hidden", !miaw));
+    this.resetBtnTargets.forEach((el) => {
+      el.classList.toggle("hidden", !miaw);
+      el.classList.toggle("inline-flex", miaw);
     });
   }
 }
