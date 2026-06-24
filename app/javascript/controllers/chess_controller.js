@@ -45,6 +45,13 @@ export default class extends Controller {
   // shape (the black-pawn style the user liked). White vs. Black is conveyed by fill color +
   // outline in #render, not by switching to the thin outline glyphs (which are a different shape
   // and were the cause of the "all different styles" look).
+  //
+  // ︎ (text-presentation variation selector) is appended to EVERY glyph in #render. Without
+  // it, some browsers render the pawn ♟ (U+265F, literally "BLACK CHESS PAWN") as a COLOR EMOJI
+  // that ignores our `color`/`text-shadow` — so white pawns came out solid black while the larger
+  // pieces (not emoji-fied) rendered white fine. FE0E forces plain-text rendering so the fill
+  // applies. We append it in code rather than embed it in these strings so it can't be silently
+  // dropped by an editor or diff.
   static PIECES = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 
   // Track the most recent move (both colors) so the left panel can show its notation + spoken form.
@@ -198,7 +205,8 @@ export default class extends Controller {
         const base = dark ? "bg-emerald-700" : "bg-emerald-100";
         const ring = isSel ? "ring-4 ring-inset ring-yellow-400" : "";
         const lastRing = isLast && !isSel ? "ring-4 ring-inset ring-amber-300/70" : "";
-        const glyph = cell ? this.constructor.PIECES[cell.type] : "";
+        // ︎ = text-presentation selector — forces non-emoji rendering (see PIECES comment).
+        const glyph = cell ? this.constructor.PIECES[cell.type] + "\uFE0E" : "";
         const dot = isTarget && !cell ? '<span class="absolute w-3 h-3 rounded-full bg-yellow-500/70"></span>' : "";
         const capRing = isTarget && cell ? "ring-4 ring-inset ring-yellow-500/80" : "";
         // Same solid glyph for both colors: White is filled white with a dark outline (text-stroke),
