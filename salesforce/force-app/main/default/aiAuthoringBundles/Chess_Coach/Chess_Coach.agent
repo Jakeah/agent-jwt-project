@@ -89,21 +89,23 @@ start_agent coach:
                 with contactId = @variables.ContactId
                 set @variables.PlayerName = @outputs.firstName
 
-        # Pull the player's LIVE game EVERY turn for a verified user (continuity-trap fix): the
-        # prechat-backed Chess_* vars go stale on a resumed verified conversation, so we re-fetch the
-        # current board from the app, keyed by the verified Contact. Runs each iteration (no cache)
-        # so the coach always sees the latest move. Anonymous users have no ContactId → skipped.
-        if @variables.ContactId is not None:
-            run @actions.get_live_game
-                with contactId = @variables.ContactId
-                set @variables.LiveFEN = @outputs.fen
-                set @variables.LivePGN = @outputs.pgn
-                set @variables.LiveTurn = @outputs.turn
-                set @variables.LiveMoveCount = @outputs.moveCount
-                set @variables.LiveStatus = @outputs.status
-
     reasoning:
         instructions: ->
+            # Pull the player's LIVE game at the START OF EVERY REASONING TURN (continuity-trap fix).
+            # This MUST be inside reasoning (not before_reasoning): before_reasoning runs on subagent
+            # ENTRY, so it captured the board only at the first turn and went stale as the player kept
+            # moving (the coach stayed on the opening). Running it here re-fetches the current board
+            # from the app every message, keyed by the verified Contact, so the coach always sees the
+            # latest move. Anonymous users have no ContactId → skipped (they use the prechat Chess_*).
+            if @variables.ContactId is not None:
+                run @actions.get_live_game
+                    with contactId = @variables.ContactId
+                    set @variables.LiveFEN = @outputs.fen
+                    set @variables.LivePGN = @outputs.pgn
+                    set @variables.LiveTurn = @outputs.turn
+                    set @variables.LiveMoveCount = @outputs.moveCount
+                    set @variables.LiveStatus = @outputs.status
+
             # Greeting — personal when we know the name.
             if @variables.PlayerName != "":
                 | The player you are coaching is named {!@variables.PlayerName}. Greet them by name on your first reply.
