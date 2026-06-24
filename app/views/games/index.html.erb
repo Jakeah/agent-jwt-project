@@ -1,25 +1,50 @@
 <% content_for :title, "My Games" %>
 
-<div class="max-w-2xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">My Games</h1>
-    <%= button_to "New game", games_path, method: :post,
-          class: "bg-slate-900 text-white rounded px-4 py-2 hover:bg-slate-700" %>
+<div class="max-w-4xl mx-auto">
+  <div class="flex items-end justify-between mb-7">
+    <div>
+      <h1 class="font-display text-2xl font-bold text-ink-900 tracking-tight">My Games</h1>
+      <p class="text-slate-500 text-sm mt-0.5">Play the engine and get coached as you go.</p>
+    </div>
+    <%= button_to games_path, method: :post,
+          class: "inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl px-4 py-2.5 shadow-card hover:shadow-lift transition" do %>
+      <span class="text-lg leading-none">+</span> New game
+    <% end %>
   </div>
 
   <% if @games.empty? %>
-    <p class="text-slate-500">No games yet. Start one and play the computer.</p>
+    <div class="bg-white rounded-2xl shadow-card border border-slate-100 px-8 py-16 text-center">
+      <span class="inline-grid place-items-center w-16 h-16 rounded-2xl bg-board-dark/10 text-board-dark text-4xl mb-4">♟</span>
+      <h2 class="font-display text-lg font-semibold text-ink-900">No games yet</h2>
+      <p class="text-slate-500 text-sm mt-1 mb-6">Start your first game and play against Stockfish.</p>
+      <%= button_to "Start playing", games_path, method: :post,
+            class: "inline-block bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl px-5 py-2.5 shadow-card hover:shadow-lift transition" %>
+    </div>
   <% else %>
-    <ul class="divide-y divide-slate-200 bg-white rounded shadow-sm">
+    <div class="grid gap-3 sm:grid-cols-2">
       <% @games.each do |game| %>
-        <li class="px-4 py-3 flex items-center justify-between">
-          <%= link_to "Game ##{game.id}", game, class: "text-slate-900 hover:underline" %>
-          <span class="text-sm text-slate-500">
-            <%= game.finished? ? "#{game.status}#{" · #{game.result}" if game.result}" : "in progress" %>
-            · <%= game.created_at.strftime("%b %-d, %Y") %>
-          </span>
-        </li>
+        <%= link_to game, class: "group block bg-white rounded-2xl shadow-card border border-slate-100 hover:border-brand-300 hover:shadow-lift transition p-5" do %>
+          <div class="flex items-center justify-between mb-3">
+            <span class="font-display font-bold text-ink-900">Game #<%= game.id %></span>
+            <% if game.finished? %>
+              <span class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                <%= game.status %>
+              </span>
+            <% else %>
+              <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span> In progress
+              </span>
+            <% end %>
+          </div>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-slate-500"><%= game.created_at.strftime("%b %-d, %Y") %></span>
+            <% if game.finished? && game.result %>
+              <span class="font-medium text-ink-800"><%= game.result %></span>
+            <% end %>
+            <span class="text-brand-600 font-medium opacity-0 group-hover:opacity-100 transition">Open →</span>
+          </div>
+        <% end %>
       <% end %>
-    </ul>
+    </div>
   <% end %>
 </div>

@@ -1,0 +1,46 @@
+<% content_for :title, "Sign in" %>
+
+<div class="min-h-[calc(100vh-0px)] flex items-center justify-center px-5 py-12">
+  <div class="w-full max-w-md">
+    <%# Brand mark %>
+    <div class="text-center mb-8">
+      <span class="inline-grid place-items-center w-14 h-14 rounded-2xl bg-brand-600 text-white text-3xl shadow-lift mb-4">♞</span>
+      <h1 class="font-display text-2xl font-bold text-white tracking-tight">Welcome back</h1>
+      <p class="text-slate-400 text-sm mt-1">Sign in to play and get coached in real time.</p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lift p-7">
+      <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "space-y-5" }) do |f| %>
+        <div>
+          <%= f.label :email, class: "block text-sm font-medium text-ink-800 mb-1.5" %>
+          <%= f.email_field :email, autofocus: true, autocomplete: "email", placeholder: "you@example.com",
+                class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" %>
+        </div>
+
+        <div>
+          <%= f.label :password, class: "block text-sm font-medium text-ink-800 mb-1.5" %>
+          <%= f.password_field :password, autocomplete: "current-password", placeholder: "••••••••",
+                class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" %>
+        </div>
+
+        <% if devise_mapping.rememberable? %>
+          <label class="flex items-center gap-2 text-sm text-slate-600 select-none cursor-pointer">
+            <%= f.check_box :remember_me, class: "rounded border-slate-300 text-brand-600 focus:ring-brand-500/30" %>
+            Remember me
+          </label>
+        <% end %>
+
+        <%= f.submit "Sign in",
+              class: "w-full rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5
+                      shadow-card hover:shadow-lift transition cursor-pointer" %>
+      <% end %>
+    </div>
+
+    <p class="text-center text-sm text-slate-400 mt-6">
+      New here?
+      <%= link_to "Create an account", new_registration_path(resource_name), class: "text-brand-300 hover:text-brand-100 font-medium" %>
+    </p>
+  </div>
+</div>

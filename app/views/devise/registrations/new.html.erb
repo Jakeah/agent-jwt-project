@@ -1,0 +1,59 @@
+<% content_for :title, "Create account" %>
+
+<div class="min-h-[calc(100vh-0px)] flex items-center justify-center px-5 py-12">
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <span class="inline-grid place-items-center w-14 h-14 rounded-2xl bg-brand-600 text-white text-3xl shadow-lift mb-4">♞</span>
+      <h1 class="font-display text-2xl font-bold text-white tracking-tight">Create your account</h1>
+      <p class="text-slate-400 text-sm mt-1">Play the engine and get a verified AI coach.</p>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-lift p-7">
+      <%= form_for(resource, as: resource_name, url: registration_path(resource_name), html: { class: "space-y-5" }) do |f| %>
+        <% if resource.errors.any? %>
+          <div class="rounded-xl bg-rose-50 border border-rose-100 px-4 py-3 text-sm text-rose-700">
+            <p class="font-semibold mb-1"><%= pluralize(resource.errors.count, "error") %> stopped this:</p>
+            <ul class="list-disc list-inside space-y-0.5">
+              <% resource.errors.full_messages.each do |msg| %>
+                <li><%= msg %></li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
+        <div>
+          <%= f.label :email, class: "block text-sm font-medium text-ink-800 mb-1.5" %>
+          <%= f.email_field :email, autofocus: true, autocomplete: "email", placeholder: "you@example.com",
+                class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" %>
+        </div>
+
+        <div>
+          <%= f.label :password, class: "block text-sm font-medium text-ink-800 mb-1.5" %>
+          <%= f.password_field :password, autocomplete: "new-password", placeholder: "At least 6 characters",
+                class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" %>
+          <% if @minimum_password_length %>
+            <p class="text-xs text-slate-400 mt-1"><%= @minimum_password_length %> characters minimum.</p>
+          <% end %>
+        </div>
+
+        <div>
+          <%= f.label :password_confirmation, "Confirm password", class: "block text-sm font-medium text-ink-800 mb-1.5" %>
+          <%= f.password_field :password_confirmation, autocomplete: "new-password", placeholder: "••••••••",
+                class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" %>
+        </div>
+
+        <%= f.submit "Create account",
+              class: "w-full rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5
+                      shadow-card hover:shadow-lift transition cursor-pointer" %>
+      <% end %>
+    </div>
+
+    <p class="text-center text-sm text-slate-400 mt-6">
+      Already have an account?
+      <%= link_to "Sign in", new_session_path(resource_name), class: "text-brand-300 hover:text-brand-100 font-medium" %>
+    </p>
+  </div>
+</div>

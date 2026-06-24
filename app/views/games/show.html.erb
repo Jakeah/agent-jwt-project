@@ -1,46 +1,76 @@
 <% content_for :title, "Game ##{@game.id}" %>
 
 <div class="max-w-6xl mx-auto">
-  <div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-bold">Game #<%= @game.id %></h1>
-    <%= link_to "← All games", games_path, class: "text-slate-500 hover:underline" %>
-  </div>
+  <%# Header %>
+  <div class="flex items-center justify-between mb-5">
+    <div class="flex items-center gap-3">
+      <%= link_to games_path, class: "grid place-items-center w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-ink-900 hover:border-slate-300 shadow-card transition", title: "All games" do %>
+        ←
+      <% end %>
+      <div>
+        <h1 class="font-display text-xl font-bold text-ink-900 tracking-tight">Game #<%= @game.id %></h1>
+        <p class="text-xs text-slate-500">You play White vs. Stockfish</p>
+      </div>
+    </div>
 
-  <%# Coach-mode toggle: pick which implementation path coaches this game. Persisted in
-      localStorage by the coach_toggle controller, which reloads so exactly one path wires up.
-      - Apex Coach (MIAW): the embedded widget (reactive Q&A, verified identity) — injected by the
-        agentforce controller in the layout, which self-gates on this same mode.
-      - MCP Coach (Headless): the custom panel below, driven by the Agentforce Agent API. %>
-  <div data-controller="coach-toggle" class="mb-4">
-    <span class="text-xs uppercase tracking-wide text-slate-400 mr-2">Coach</span>
-    <div class="inline-flex rounded-lg border border-slate-200 overflow-hidden text-sm">
-      <button type="button" data-coach-toggle-target="button" data-mode="miaw"
-              data-action="click->coach-toggle#select"
-              class="px-3 py-1.5 font-medium">Apex Coach (MIAW)</button>
-      <button type="button" data-coach-toggle-target="button" data-mode="headless"
-              data-action="click->coach-toggle#select"
-              class="px-3 py-1.5 font-medium border-l border-slate-200">MCP Coach (Headless)</button>
+    <%# Coach-mode toggle: pick which implementation path coaches this game. Persisted in
+        localStorage by the coach_toggle controller, which reloads so exactly one path wires up.
+        - Apex Coach (MIAW): the embedded widget (reactive Q&A, verified identity).
+        - MCP Coach (Headless): the custom panel in the sidebar, driven by the Agentforce Agent API. %>
+    <div data-controller="coach-toggle" class="flex items-center gap-2">
+      <span class="hidden md:inline text-xs uppercase tracking-wider text-slate-400 font-semibold">Coach</span>
+      <div class="inline-flex rounded-xl bg-slate-100 p-1 text-sm">
+        <button type="button" data-coach-toggle-target="button" data-mode="miaw"
+                data-action="click->coach-toggle#select"
+                class="px-3 py-1.5 rounded-lg font-medium text-slate-600 transition">Apex&nbsp;(MIAW)</button>
+        <button type="button" data-coach-toggle-target="button" data-mode="headless"
+                data-action="click->coach-toggle#select"
+                class="px-3 py-1.5 rounded-lg font-medium text-slate-600 transition">MCP&nbsp;(Headless)</button>
+      </div>
     </div>
   </div>
 
+  <%# Two-column shell: the board column has a STABLE width (lg:flex-1 with the board centered) and
+      the coach sidebar is a fixed-width column that never squeezes the board. This is the fix for
+      the headless panel making the board "wonky" — previously both were flex siblings with no
+      shrink control, so showing the panel squished the board's inner flex children. %>
   <div class="flex flex-col lg:flex-row gap-6 items-start">
-    <%# Phase 2 mounts the chessboard + Stockfish analysis onto this element. %>
-    <div data-controller="chess"
-         data-chess-game-id-value="<%= @game.id %>"
-         data-chess-fen-value="<%= @game.fen %>"
-         data-chess-move-url-value="<%= move_game_path(@game) %>"
-         data-chess-finish-url-value="<%= finish_game_path(@game) %>">
-      <p class="text-slate-500">Loading board…</p>
+    <%# Board + analysis. Phase 2's chess controller renders into the inner element. %>
+    <div class="bg-white rounded-2xl shadow-card border border-slate-100 p-5 lg:p-6 w-full lg:flex-1 min-w-0">
+      <div data-controller="chess"
+           data-chess-game-id-value="<%= @game.id %>"
+           data-chess-fen-value="<%= @game.fen %>"
+           data-chess-move-url-value="<%= move_game_path(@game) %>"
+           data-chess-finish-url-value="<%= finish_game_path(@game) %>">
+        <p class="text-slate-400 text-sm">Loading board…</p>
+      </div>
     </div>
 
-    <%# Headless MCP coach panel. Self-gates on coach mode (hidden unless "headless" is selected),
-        so it never competes with the embedded MIAW widget. Renders its own chat UI in JS. %>
-    <div class="w-full lg:w-96"
-         data-controller="agent-chat"
-         data-agent-chat-game-id-value="<%= @game.id %>"
-         data-agent-chat-create-url-value="<%= game_agent_chat_path(@game) %>"
-         data-agent-chat-message-url-value="<%= message_game_agent_chat_path(@game) %>"
-         data-agent-chat-destroy-url-value="<%= game_agent_chat_path(@game) %>"
-         hidden></div>
+    <%# Coach sidebar — fixed width, shrink-0 so it never steals the board's space. The headless MCP
+        panel self-gates on coach mode (hidden unless "headless"); in MIAW mode the embedded widget
+        floats over the page and this sidebar shows a hint card instead. %>
+    <aside class="w-full lg:w-80 shrink-0">
+      <div class="lg:hidden w-full" data-coach-mode-hint></div>
+      <div class="w-full"
+           data-controller="agent-chat"
+           data-agent-chat-game-id-value="<%= @game.id %>"
+           data-agent-chat-create-url-value="<%= game_agent_chat_path(@game) %>"
+           data-agent-chat-message-url-value="<%= message_game_agent_chat_path(@game) %>"
+           data-agent-chat-destroy-url-value="<%= game_agent_chat_path(@game) %>"
+           hidden></div>
+
+      <%# MIAW-mode hint: shown only when the embedded widget owns the page (the toggle controller
+          reveals/hides this based on mode so the sidebar is never empty/wonky). %>
+      <div data-coach-toggle-target="miawHint" class="bg-white rounded-2xl shadow-card border border-slate-100 p-5 hidden">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-2 h-2 rounded-full bg-brand-500"></span>
+          <h3 class="font-semibold text-sm text-ink-900">Apex Coach (MIAW)</h3>
+        </div>
+        <p class="text-sm text-slate-500 leading-relaxed">
+          Your verified coach is in the chat bubble at the bottom-right. Open it and ask about your
+          position any time — it reads your live board.
+        </p>
+      </div>
+    </aside>
   </div>
 </div>
