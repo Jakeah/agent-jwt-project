@@ -37,6 +37,11 @@ const CONTEXT_DEBOUNCE_MS = 400; // collapse a flurry of moves into one settled 
 // means the token is being REJECTED (e.g. no matching Contact for the signed-in email) — stop.
 const REMINT_WINDOW_MS = 30000;
 const MAX_REMINTS_PER_WINDOW = 5;
+// TEMP diagnostics for the v2 "New chat" reset: the conversation keeps resuming instead of starting
+// fresh. Logs the exact order of clearSession → ready re-fire → launchChat, plus the widget's own
+// conversation/session lifecycle events, so one click reveals where the reset breaks. Remove once fixed.
+const RESET_DEBUG = true;
+const rlog = (...a) => RESET_DEBUG && console.log("[agentforce:reset]", ...a);
 
 export default class extends Controller {
   static values = {
@@ -60,6 +65,20 @@ export default class extends Controller {
     // React to board changes: re-seed prechat (helps a chat opened later) AND push live context
     // into an open conversation (the mid-game freshness fix). Both guard on isWidgetReady internally.
     window.addEventListener("chess:state-changed", this.onGameStateChanged);
+
+    // TEMP: trace the widget's own conversation/session lifecycle so we can see exactly what the
+    // "New chat" reset does (does the conversation actually END before launchChat runs?).
+    if (RESET_DEBUG) {
+      this.resetDebugHandlers = {
+        onEmbeddedMessagingConversationOpened: (e) => rlog("event: ConversationOpened", e?.detail),
+        onEmbeddedMessagingConversationClosed: (e) => rlog("event: ConversationClosed", e?.detail),
+        onEmbeddedMessagingWindowClosed: (e) => rlog("event: WindowClosed", e?.detail),
+        onEmbeddedMessagingSessionStatusUpdate: (e) => rlog("event: SessionStatusUpdate", e?.detail),
+      };
+      for (const [name, fn] of Object.entries(this.resetDebugHandlers)) {
+        window.addEventListener(name, fn);
+      }
+    }
 
     this.contextTimer = null;
     this.remintTimes = []; // timestamps of recent re-mints, for the loop guard
@@ -93,6 +112,11 @@ export default class extends Controller {
     window.removeEventListener("onEmbeddedMessagingReady", this.onReady);
     window.removeEventListener("onEmbeddedMessagingIdentityTokenExpired", this.onTokenExpired);
     window.removeEventListener("chess:state-changed", this.onGameStateChanged);
+    if (this.resetDebugHandlers) {
+      for (const [name, fn] of Object.entries(this.resetDebugHandlers)) {
+        window.removeEventListener(name, fn);
+      }
+    }
     if (this.contextTimer) clearTimeout(this.contextTimer);
   }
 
@@ -173,6 +197,7 @@ export default class extends Controller {
   // re-fires once the API is ready for another conversation, which is our hook to re-verify, re-seed,
   // and (if a reset was requested) launch a brand-new conversation.
   async handleReady() {
+    rlog("onEmbeddedMessagingReady fired (relaunchAfterReady=" + !!this.relaunchAfterReady + ")");
     await this.setIdentityToken();
     this.seedGameContext();
     this.pushLiveContext(); // push current board straight away so the first turn is live
@@ -191,14 +216,18 @@ export default class extends Controller {
   // the old conversation, so v1 will create a new one on next message anyway).
   launchFreshConversation() {
     const util = window.embeddedservice_bootstrap?.utilAPI;
-    if (typeof util?.launchChat !== "function") return;
+    if (typeof util?.launchChat !== "function") {
+      rlog("launchChat NOT available on utilAPI");
+      return;
+    }
+    rlog("calling launchChat({shouldStartNewConversation:true})");
     try {
       const p = util.launchChat({ shouldStartNewConversation: true });
-      if (p && typeof p.catch === "function") {
-        p.catch((err) => console.error("[agentforce] launchChat failed:", err));
+      if (p && typeof p.then === "function") {
+        p.then(() => rlog("launchChat resolved")).catch((err) => rlog("launchChat REJECTED:", err?.message || err));
       }
     } catch (err) {
-      console.error("[agentforce] launchChat threw:", err);
+      rlog("launchChat THREW:", err?.message || err);
     }
   }
 
@@ -216,12 +245,19 @@ export default class extends Controller {
       console.warn("[agentforce] reset unavailable — widget not ready");
       return;
     }
+    rlog("resetConversation: calling clearSession({shouldEndSession:true})");
     this.relaunchAfterReady = true; // handleReady (re-fired by clearSession) will launch the new convo
     try {
-      await api.clearSession({ shouldEndSession: true });
+      const p = api.clearSession({ shouldEndSession: true });
+      if (p && typeof p.then === "function") {
+        await p;
+        rlog("clearSession resolved");
+      } else {
+        rlog("clearSession returned (non-promise)");
+      }
     } catch (err) {
       this.relaunchAfterReady = false;
-      console.error("[agentforce] failed to reset conversation:", err);
+      rlog("clearSession THREW:", err?.message || err);
     }
   }
 
