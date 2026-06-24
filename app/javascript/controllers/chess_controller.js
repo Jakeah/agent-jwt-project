@@ -214,18 +214,18 @@ export default class extends Controller {
         const isSel = this.selected === square;
         const isTarget = this.legalTargets.includes(square);
         const isLast = this.lastMove && (this.lastMove.from === square || this.lastMove.to === square);
-        const base = dark ? "bg-emerald-700" : "bg-emerald-100";
-        const ring = isSel ? "ring-4 ring-inset ring-yellow-400" : "";
-        const lastRing = isLast && !isSel ? "ring-4 ring-inset ring-amber-300/70" : "";
+        const base = dark ? "bg-board-dark" : "bg-board-light";
+        const ring = isSel ? "ring-4 ring-inset ring-board-highlight" : "";
+        const lastRing = isLast && !isSel ? "ring-4 ring-inset ring-board-highlight/60" : "";
         const piece = cell
-          ? `<span class="block w-[88%] h-[88%] drop-shadow-sm">${PIECE_SVG[cell.color + cell.type.toUpperCase()]}</span>`
+          ? `<span class="block w-[86%] h-[86%] drop-shadow-sm">${PIECE_SVG[cell.color + cell.type.toUpperCase()]}</span>`
           : "";
-        const dot = isTarget && !cell ? '<span class="absolute w-3 h-3 rounded-full bg-yellow-500/70"></span>' : "";
-        const capRing = isTarget && cell ? "ring-4 ring-inset ring-yellow-500/80" : "";
+        const dot = isTarget && !cell ? '<span class="absolute w-3.5 h-3.5 rounded-full bg-black/25"></span>' : "";
+        const capRing = isTarget && cell ? "ring-[3px] ring-inset ring-black/30" : "";
         cells += `
           <div data-action="click->chess#onSquareClick" data-square="${square}"
-               class="relative w-14 h-14 md:w-16 md:h-16 flex items-center justify-center
-                      cursor-pointer ${base} ${ring} ${lastRing} ${capRing}">
+               class="relative aspect-square flex items-center justify-center
+                      cursor-pointer ${base} ${ring} ${lastRing} ${capRing} hover:brightness-105 transition">
             ${dot}${piece}
           </div>`;
       });
@@ -233,53 +233,57 @@ export default class extends Controller {
     // Bottom file gutter: an empty corner cell, then a..h under each column.
     let fileGutter = '<div class="w-5"></div>';
     files.forEach((f) => {
-      fileGutter += `<div class="w-14 md:w-16 text-center text-xs font-medium text-slate-400">${f}</div>`;
+      fileGutter += `<div class="text-center text-xs font-semibold text-slate-400">${f}</div>`;
     });
 
     const boardHtml = `
-      <div class="select-none w-fit">
-        <div class="grid grid-cols-[1.25rem_repeat(8,minmax(0,1fr))] border-2 border-slate-800">
+      <div class="select-none w-full max-w-[34rem] mx-auto">
+        <div class="grid grid-cols-[1.25rem_repeat(8,minmax(0,1fr))] rounded-xl overflow-hidden ring-1 ring-black/10 shadow-lift">
           ${cells}
         </div>
-        <div class="grid grid-cols-[1.25rem_repeat(8,minmax(0,1fr))] mt-1">
+        <div class="grid grid-cols-[1.25rem_repeat(8,minmax(0,1fr))] mt-1.5">
           ${fileGutter}
         </div>
       </div>`;
 
-    // Left panel: the last move in large notation + how it's said aloud (a learning aid).
+    // Side panels: eval bar (left of board) + last-move card (right). Lays out as a row on wider
+    // cards, stacking gracefully when the board column is narrow.
     const movePanel = this.#movePanelHtml();
 
     this.element.innerHTML = `
-      <div class="flex gap-6 items-start">
-        ${movePanel}
-        <div>
-          ${boardHtml}
-          <p data-chess-status class="mt-3 text-sm text-slate-600">Your move (White).</p>
-        </div>
-        <div class="w-48">
-          <h3 class="font-semibold mb-2 text-sm uppercase tracking-wide text-slate-500">Analysis</h3>
-          <div class="h-64 w-8 bg-slate-900 rounded relative overflow-hidden mb-2">
-            <div data-chess-evalfill class="absolute bottom-0 left-0 right-0 bg-white transition-all"
+      <div class="flex flex-col sm:flex-row gap-5 items-center sm:items-start justify-center">
+        <div class="flex sm:flex-col items-center gap-2 order-2 sm:order-1">
+          <div class="h-6 w-40 sm:h-[28rem] sm:w-7 bg-ink-900 rounded-full relative overflow-hidden ring-1 ring-black/10">
+            <div data-chess-evalfill class="absolute bottom-0 left-0 right-0 bg-white transition-all duration-500"
                  style="height:50%"></div>
           </div>
-          <p data-chess-evaltext class="text-sm text-slate-700">…</p>
-          <p data-chess-besttext class="text-xs text-slate-500 mt-1"></p>
         </div>
+
+        <div class="order-1 sm:order-2 flex-1 min-w-0 w-full">
+          ${boardHtml}
+          <div class="mt-4 flex items-center justify-between gap-3">
+            <p data-chess-status class="text-sm font-medium text-slate-600">Your move (White).</p>
+            <p data-chess-evaltext class="text-sm font-semibold text-ink-900">…</p>
+          </div>
+          <p data-chess-besttext class="text-xs text-slate-400 mt-1"></p>
+        </div>
+
+        ${movePanel}
       </div>`;
   }
 
-  // The left-hand "last move" card: big SAN code + the spoken form underneath.
+  // The "last move" card: big SAN code + the spoken form (a learning aid).
   #movePanelHtml() {
     const m = this.lastMove;
     const mover = m ? (m.color === "w" ? "White" : "Black") : "";
     const code = m ? m.san : "—";
     const spoken = m ? spokenMove(m) : "Make a move to begin";
     return `
-      <div class="w-44 shrink-0">
-        <h3 class="font-semibold mb-2 text-sm uppercase tracking-wide text-slate-500">Last move</h3>
-        <p class="text-xs text-slate-400 mb-1">${mover}</p>
-        <p class="text-5xl font-bold tracking-tight text-slate-900 leading-none break-all">${code}</p>
-        <p class="mt-3 text-base text-slate-600">${spoken}</p>
+      <div class="order-3 w-full sm:w-44 shrink-0 rounded-xl bg-slate-50 border border-slate-100 p-4">
+        <h3 class="font-semibold mb-1.5 text-xs uppercase tracking-wider text-slate-400">Last move</h3>
+        <p class="text-xs text-slate-400 mb-0.5">${mover || "&nbsp;"}</p>
+        <p class="text-4xl font-display font-extrabold tracking-tight text-ink-900 leading-none break-all">${code}</p>
+        <p class="mt-2.5 text-sm text-slate-600 leading-snug">${spoken}</p>
       </div>`;
   }
 

@@ -12,7 +12,7 @@ import { Controller } from "@hotwired/stimulus";
 const COACH_MODE_KEY = "coachMode";
 
 export default class extends Controller {
-  static targets = ["button"];
+  static targets = ["button", "miawHint"];
 
   connect() {
     this.#reflect();
@@ -39,15 +39,22 @@ export default class extends Controller {
     }
   }
 
-  // Highlight the active button.
+  // Highlight the active button (segmented-control pill style) and show the MIAW hint card in the
+  // sidebar when the embedded widget owns the page, so the sidebar is never empty.
   #reflect() {
     const active = this.#mode();
     this.buttonTargets.forEach((btn) => {
       const isActive = btn.dataset.mode === active;
-      btn.classList.toggle("bg-emerald-600", isActive);
-      btn.classList.toggle("text-white", isActive);
+      btn.classList.toggle("bg-white", isActive);
+      btn.classList.toggle("text-ink-900", isActive);
+      btn.classList.toggle("shadow-card", isActive);
       btn.classList.toggle("text-slate-600", !isActive);
       btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+
+    // In MIAW mode the headless panel stays hidden (it self-gates), so reveal the hint card.
+    this.miawHintTargets.forEach((el) => {
+      el.classList.toggle("hidden", active !== "miaw");
     });
   }
 }

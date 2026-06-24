@@ -178,21 +178,22 @@ export default class extends Controller {
   // --- rendering (self-contained; no server markup needed) ---
   #render() {
     this.element.innerHTML = `
-      <div class="border border-slate-200 rounded-lg bg-white flex flex-col h-[28rem]">
-        <div class="px-4 py-2 border-b border-slate-100 flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <h3 class="font-semibold text-sm">Chess Coach (MCP · headless)</h3>
+      <div class="border border-slate-100 rounded-2xl bg-white shadow-card flex flex-col h-[30rem] overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+          <h3 class="font-semibold text-sm text-ink-900">Chess Coach</h3>
+          <span class="ml-auto text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">MCP · headless</span>
         </div>
         <div data-agent-chat-transcript
              class="flex-1 overflow-y-auto px-4 py-3 space-y-2 text-sm text-slate-700">
           <p class="text-slate-400">Make a move and your coach will weigh in — or ask a question below.</p>
         </div>
-        <form data-action="submit->agent-chat#ask" class="border-t border-slate-100 p-2 flex gap-2">
+        <form data-action="submit->agent-chat#ask" class="border-t border-slate-100 p-2.5 flex gap-2">
           <input data-agent-chat-input type="text" placeholder="Ask the coach…"
-                 class="flex-1 rounded border border-slate-300 px-3 py-1.5 text-sm
-                        focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                 class="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" />
           <button type="submit"
-                  class="rounded bg-emerald-600 text-white text-sm px-3 py-1.5 hover:bg-emerald-700">
+                  class="rounded-xl bg-brand-600 text-white text-sm font-semibold px-3.5 py-2 hover:bg-brand-700 transition">
             Send
           </button>
         </form>
@@ -208,12 +209,12 @@ export default class extends Controller {
 
     const wrap = document.createElement("div");
     const styles = {
-      you: "ml-auto bg-emerald-600 text-white",
-      coach: "mr-auto bg-slate-100 text-slate-800",
+      you: "ml-auto bg-brand-600 text-white",
+      coach: "mr-auto bg-slate-100 text-ink-800",
       move: "mx-auto bg-amber-50 text-amber-700 text-xs italic",
       system: "mx-auto bg-rose-50 text-rose-700 text-xs",
     };
-    wrap.className = `max-w-[85%] rounded-lg px-3 py-1.5 ${styles[role] || styles.coach}`;
+    wrap.className = `max-w-[85%] rounded-2xl px-3 py-2 leading-snug ${styles[role] || styles.coach}`;
     wrap.dataset.role = role;
     if (pending) wrap.dataset.pending = "true";
     wrap.textContent = text;
