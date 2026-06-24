@@ -11,6 +11,11 @@
 
     <%= yield :head %>
 
+    <%# Inter — the app's typeface (modern, highly legible at UI sizes). %>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
     <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
 
@@ -29,7 +34,9 @@
       session on sign-out. Config comes from the deployment registry — SOMA/MOMA stays a config
       change. Gating on user_signed_in? means /identity_token always has a Devise session. %>
   <% if user_signed_in? %><% deployment = current_agent_deployment %><% end %>
-  <body class="bg-slate-50 text-slate-900 min-h-screen"
+  <%# Auth pages (logged-out) get the aurora backdrop + no chrome; signed-in pages get the app shell. %>
+  <body class="font-sans text-ink-900 min-h-screen flex flex-col <%= user_signed_in? ? "bg-slate-50" : "" %>"
+        <%= "data-auth" unless user_signed_in? %>
         <% if user_signed_in? %>
         data-controller="agentforce"
         data-agentforce-org-id-value="<%= deployment.org_id %>"
@@ -39,29 +46,41 @@
         data-agentforce-script-url-value="<%= "#{deployment.site_url}/assets/js/bootstrap.min.js" %>"
         data-agentforce-deployment-value="<%= deployment.name %>"
         <% end %>>
-    <nav class="bg-slate-900 text-white">
-      <div class="container mx-auto px-5 py-3 flex items-center justify-between">
-        <%= link_to "♞ Chess + Agentforce", root_path, class: "font-semibold text-lg" %>
-        <div class="text-sm">
-          <% if user_signed_in? %>
-            <span class="text-slate-300 mr-3"><%= current_user.email %></span>
+    <% if user_signed_in? %>
+      <nav class="sticky top-0 z-40 bg-ink-950/95 backdrop-blur border-b border-white/5 text-white">
+        <div class="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
+          <%= link_to root_path, class: "flex items-center gap-2 font-display font-bold text-[15px] tracking-tight group" do %>
+            <span class="grid place-items-center w-8 h-8 rounded-lg bg-brand-600 text-white text-lg shadow-sm group-hover:bg-brand-500 transition">♞</span>
+            <span>Chess<span class="text-brand-300"> Coach</span></span>
+          <% end %>
+          <div class="flex items-center gap-3">
+            <span class="hidden sm:grid place-items-center w-8 h-8 rounded-full bg-white/10 text-brand-200 text-xs font-semibold uppercase">
+              <%= current_user.email.first(2) %>
+            </span>
+            <span class="hidden sm:inline text-sm text-slate-300"><%= current_user.email %></span>
             <%# End the verified chat session before the Devise session is destroyed. %>
             <%= button_to "Sign out", destroy_user_session_path, method: :delete,
-                  class: "underline hover:text-slate-300",
+                  class: "text-sm font-medium text-slate-300 hover:text-white rounded-lg px-3 py-1.5 hover:bg-white/10 transition",
                   form: { data: { action: "submit->agentforce#endSession" } } %>
-          <% else %>
-            <%= link_to "Sign in", new_user_session_path, class: "underline hover:text-slate-300" %>
-          <% end %>
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    <% end %>
 
-    <main class="container mx-auto mt-8 px-5">
+    <main class="flex-1 <%= user_signed_in? ? "max-w-6xl mx-auto w-full mt-8 px-5 pb-16" : "" %>">
       <% if notice %>
-        <p class="bg-emerald-100 text-emerald-900 rounded px-4 py-2 mb-4"><%= notice %></p>
+        <div class="<%= user_signed_in? ? "" : "max-w-md mx-auto px-5 pt-5" %>">
+          <p class="flex items-center gap-2 bg-brand-50 text-brand-800 border border-brand-100 rounded-xl px-4 py-2.5 mb-4 text-sm font-medium shadow-card">
+            <span class="text-brand-500">✓</span><%= notice %>
+          </p>
+        </div>
       <% end %>
       <% if alert %>
-        <p class="bg-rose-100 text-rose-900 rounded px-4 py-2 mb-4"><%= alert %></p>
+        <div class="<%= user_signed_in? ? "" : "max-w-md mx-auto px-5 pt-5" %>">
+          <p class="flex items-center gap-2 bg-rose-50 text-rose-800 border border-rose-100 rounded-xl px-4 py-2.5 mb-4 text-sm font-medium shadow-card">
+            <span class="text-rose-500">!</span><%= alert %>
+          </p>
+        </div>
       <% end %>
       <%= yield %>
     </main>

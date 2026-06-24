@@ -1,1 +1,47 @@
 @import "tailwindcss";
+
+/* ── Design system ──────────────────────────────────────────────────────────
+   A chess-app-inspired visual language (chess.com board greens + a calm, modern
+   slate/emerald UI). Tailwind v4 CSS-first config: tokens live here, used as
+   utilities (bg-board-dark, text-brand, font-display, shadow-card, …). */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand — deep emerald, the app's signature */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-300: #6ee7b7;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+
+  /* Classic chess.com board palette */
+  --color-board-light: #eeeed2;
+  --color-board-dark: #769656;
+  --color-board-highlight: #f7f769; /* last-move / selected glow */
+
+  /* Ink — warm charcoal, softer than pure slate */
+  --color-ink-950: #0b1120;
+  --color-ink-900: #111827;
+  --color-ink-800: #1f2937;
+
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-lift: 0 10px 25px -5px rgb(0 0 0 / 0.12), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+}
+
+/* Smooth scroll + crisper font rendering */
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* A subtle aurora backdrop for the auth screens (set on <body data-auth>). */
+[data-auth] {
+  background:
+    radial-gradient(60rem 60rem at 110% -10%, rgb(16 185 129 / 0.10), transparent 60%),
+    radial-gradient(50rem 50rem at -10% 110%, rgb(5 150 105 / 0.10), transparent 55%),
+    #0b1120;
+}
