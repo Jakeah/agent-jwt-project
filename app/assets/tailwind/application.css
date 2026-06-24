@@ -1,17 +1,1 @@
 @import "tailwindcss";
-
-/* White chess pieces: we render the SOLID glyph (same shape as the black pieces) filled white,
-   then outline it in dark so it stays legible on the light squares. Keeps every piece uniform.
-   We outline with a 4-direction text-shadow rather than -webkit-text-stroke: stroke is centered
-   on the glyph edge and eats the fill of small glyphs (pawns are drawn much smaller than the
-   back-rank pieces, so they turned almost solid dark). text-shadow paints OUTSIDE the glyph, so
-   the full white fill survives on every piece regardless of its drawn size. */
-.chess-piece-white {
-  color: #fff;
-  text-shadow:
-    -1px -1px 0 #0f172a,
-     1px -1px 0 #0f172a,
-    -1px  1px 0 #0f172a,
-     1px  1px 0 #0f172a,
-     0    0   2px #0f172a; /* slate-900 */
-}

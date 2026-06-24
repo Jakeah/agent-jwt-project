@@ -12,6 +12,8 @@ pin "chess.js", to: "chess.js"
 pin "engine", to: "engine.js"
 # Shared game-state snapshot bridged from the chess board to the chat widget.
 pin "game_state", to: "game_state.js"
+# Inline cburnett SVG piece sprites (replaces the Unicode glyphs).
+pin "pieces", to: "pieces.js"
 # Note: Stockfish runs as a Web Worker from /stockfish/stockfish.js (public/), not via
 # importmap — workers can't be ESM imports and the asm.js build needs no cross-origin
 # isolation headers.

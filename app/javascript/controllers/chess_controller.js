@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus";
 import { Chess } from "chess.js";
 import { Engine } from "engine";
 import { updateGameState } from "game_state";
+import { PIECE_SVG } from "pieces";
 
 // Full piece names, for spelling a move out loud ("Knight to f3").
 const PIECE_NAMES = { k: "King", q: "Queen", r: "Rook", b: "Bishop", n: "Knight", p: "Pawn" };
@@ -40,19 +41,6 @@ export default class extends Controller {
     finishUrl: String,
     depth: { type: Number, default: 12 },
   };
-
-  // One uniform piece set: the SOLID (filled) glyphs for BOTH colors, so every piece is the same
-  // shape (the black-pawn style the user liked). White vs. Black is conveyed by fill color +
-  // outline in #render, not by switching to the thin outline glyphs (which are a different shape
-  // and were the cause of the "all different styles" look).
-  //
-  // ︎ (text-presentation variation selector) is appended to EVERY glyph in #render. Without
-  // it, some browsers render the pawn ♟ (U+265F, literally "BLACK CHESS PAWN") as a COLOR EMOJI
-  // that ignores our `color`/`text-shadow` — so white pawns came out solid black while the larger
-  // pieces (not emoji-fied) rendered white fine. FE0E forces plain-text rendering so the fill
-  // applies. We append it in code rather than embed it in these strings so it can't be silently
-  // dropped by an editor or diff.
-  static PIECES = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 
   // Track the most recent move (both colors) so the left panel can show its notation + spoken form.
   lastMove = null;
@@ -205,18 +193,16 @@ export default class extends Controller {
         const base = dark ? "bg-emerald-700" : "bg-emerald-100";
         const ring = isSel ? "ring-4 ring-inset ring-yellow-400" : "";
         const lastRing = isLast && !isSel ? "ring-4 ring-inset ring-amber-300/70" : "";
-        // ︎ = text-presentation selector — forces non-emoji rendering (see PIECES comment).
-        const glyph = cell ? this.constructor.PIECES[cell.type] + "\uFE0E" : "";
+        const piece = cell
+          ? `<span class="block w-[88%] h-[88%] drop-shadow-sm">${PIECE_SVG[cell.color + cell.type.toUpperCase()]}</span>`
+          : "";
         const dot = isTarget && !cell ? '<span class="absolute w-3 h-3 rounded-full bg-yellow-500/70"></span>' : "";
         const capRing = isTarget && cell ? "ring-4 ring-inset ring-yellow-500/80" : "";
-        // Same solid glyph for both colors: White is filled white with a dark outline (text-stroke),
-        // Black is solid dark. This keeps every piece the identical shape.
-        const pieceClass = cell?.color === "w" ? "chess-piece-white" : "text-slate-900";
         cells += `
           <div data-action="click->chess#onSquareClick" data-square="${square}"
                class="relative w-14 h-14 md:w-16 md:h-16 flex items-center justify-center
-                      text-4xl cursor-pointer ${base} ${ring} ${lastRing} ${capRing}">
-            ${dot}<span class="${pieceClass}">${glyph}</span>
+                      cursor-pointer ${base} ${ring} ${lastRing} ${capRing}">
+            ${dot}${piece}
           </div>`;
       });
     });
