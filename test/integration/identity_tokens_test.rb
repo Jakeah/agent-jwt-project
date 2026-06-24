@@ -27,6 +27,17 @@ class IdentityTokensTest < ActionDispatch::IntegrationTest
     assert_equal @user.email, payload["sub"]
   end
 
+  test "token response is non-cacheable (no ETag/304 serving a stale short-lived token)" do
+    sign_in @user
+    get identity_token_path
+
+    assert_response :success
+    # Rails' default ETag would let the browser get a 304 and reuse a cached (expired) token,
+    # which Salesforce rejects. The endpoint must forbid caching.
+    assert_includes response.headers["Cache-Control"].to_s, "no-store"
+    assert_nil response.headers["ETag"], "a credential endpoint must not emit an ETag"
+  end
+
   test "explicit unknown deployment param is a 422 (no silent fallback to wrong agent)" do
     sign_in @user
     get identity_token_path(deployment: "no_such_deployment")

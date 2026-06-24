@@ -11,6 +11,8 @@ class IdentityTokensController < ApplicationController
     deployment = AgentDeployment.resolve(params[:deployment])
     token = IdentityToken.new(user: current_user, deployment: deployment).to_jwt
 
+    prevent_token_caching!
+
     render json: {
       identityTokenType: "JWT",
       identityToken: token,
@@ -18,5 +20,25 @@ class IdentityTokensController < ApplicationController
     }
   rescue ArgumentError => e
     render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  private
+
+  # A freshly-minted, short-lived credential must NEVER be reused from an HTTP cache. By default
+  # Rails' Rack::ETag adds a weak ETag to this 200 response, so the browser sends a conditional
+  # request, gets 304 Not Modified, and serves the CACHED (now-stale) token. Within the 5-min TTL
+  # that stale token reaches setIdentityToken and Salesforce rejects it ("Something went wrong"),
+  # which can also drive the rejection→re-mint cycle.
+  #
+  # Two parts, because they do different jobs:
+  #   - Cache-Control: no-store tells the BROWSER never to store the token body.
+  #   - Rack::ETag only skips emitting an ETag when the response ALREADY carries an ETag or
+  #     Last-Modified header (it ignores Cache-Control entirely — confirmed in rack 3.x
+  #     etag.rb#skip_caching?). Setting Last-Modified makes it skip, so there's no ETag → no 304 →
+  #     a fresh token every request.
+  def prevent_token_caching!
+    response.cache_control.replace(no_store: true)
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Last-Modified"] = Time.current.httpdate # makes Rack::ETag skip the ETag
   end
 end
