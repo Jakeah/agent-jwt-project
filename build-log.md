@@ -1214,3 +1214,137 @@ MCP — it is actively destructive (overwrites builder draft, poisons lineage)."
 STILL OPEN: the naming guardrail is NOT on the MCP agent (v4 predates it). Must be added in the BUILDER
 forward from v4 (edit coach instructions → Save→Commit→Activate), NEVER via source publish. Lower priority
 — prod Chess_Coach (v6) has the guardrail and is the demo agent; the MCP agent is the experiment/reference.
+
+## 2026-06-24 — NEXT UP (planned, not yet built): headless Agent-API coach + MIAW toggle
+
+Plan written to ~/.claude/plans/so-i-have-a-delegated-clarke.md (FEATURE PLAN section). Approved approach;
+build starts after a /compact. Summary so it survives context loss:
+
+GOAL: coach auto-responds to the player's moves, via a SECOND, toggleable implementation path.
+  - Apex coach (Chess_Coach) → MIAW = existing, unchanged (reactive, interactive Q&A path).
+  - MCP coach (Chess_Coach_MCP) → NEW headless Agentforce **Agent API** (server-to-server REST). Rails
+    controls the send, so the app auto-posts after each PLAYER move and renders the agent's grounded reply.
+  - In-app toggle flips between the two (localStorage). Showcases two impl paths.
+
+GROUNDED AGENT API FACTS (browser-extracted from developer.salesforce.com/docs/ai/agentforce, 2026-06-24):
+  - Headless agents only; NOT type "Agentforce (Default)". Chess_Coach_MCP is AgentforceServiceAgent → OK.
+  - Auth = External Client App (ECA), client-credentials flow. Scopes: api, refresh_token/offline_access,
+    chatbot_api, sfap_api. "Issue JWT-based access tokens." Run-As an API-only user. Token via
+    POST {MY_DOMAIN}/services/oauth2/token (grant_type=client_credentials).
+  - Endpoints (base https://api.salesforce.com, 120s timeout → HTTP 500 on timeout):
+      start:  POST /einstein/ai-agent/v1/agents/{AGENT_ID}/sessions  (externalSessionKey UUID, instanceConfig.endpoint=MY_DOMAIN, bypassUser)
+      send:   POST /einstein/ai-agent/v1/sessions/{SESSION_ID}/messages  (message.sequenceId++, type "Text", text)
+      end:    DELETE /einstein/ai-agent/v1/sessions/{SESSION_ID}
+  - Context: API supports custom variables (external visibility + "set by API") per turn — but we chose the
+    simpler EMBED-IN-MESSAGE path: Rails composes each turn's text with live move + FEN + opponent Elo +
+    player name. No agent/builder changes (MCP coach grounds on FEN via its MCP tools).
+
+USER DECISIONS (locked): (1) auto-comment after PLAYER move only; the turn's text includes the computer's
+reply as context; PASS OPPONENT STRENGTH/ELO (user is adding a chess.com-Elo difficulty selector to the app
+later — plumb a difficulty {label,elo} field now, default from engine depth). (2) embed context in message.
+(3) USER creates the ECA in Setup, gives me consumer key/secret + AGENT_ID + My Domain URL; secrets go in
+env/Heroku config vars (AGENTFORCE_CONSUMER_KEY/SECRET), never in repo.
+
+REPO STATE: no server→SF OAuth, no HTTP gem, no ECA yet (all net-new). Reuse: identity_token.rb JWT/key-from-
+ENV pattern, agent_deployments.yml + AgentDeployment registry, Solid Cache (token+session caching), jwt gem,
+game_state.js event bus. Use Net::HTTP (stdlib) — no new gem.
+
+FILES (per plan): NEW app/services/agentforce_token.rb, app/services/agent_api_client.rb,
+app/controllers/agent_chats_controller.rb, app/javascript/controllers/agent_chat_controller.js. MODIFIED
+agent_deployments.yml (+mode discriminator, chess_mcp_headless entry), agent_deployment.rb, routes.rb,
+chess_controller.js (emit chess:turn-complete after computer reply), game_state.js (difficulty), 
+games/show.html.erb (toggle + panel), importmap.rb, agentforce_controller.js (gate MIAW init on mode).
+
+BLOCKING ON USER: ECA creation in Setup → consumer key/secret + AGENT_ID(Chess_Coach_MCP) + My Domain URL.
+
+---
+
+## 2026-06-24 01:03 EDT — BUILT: MIAW live-context fix + headless Agent-API coach scaffold (code complete; 2 user-owned stops remain)
+
+Built both 2026-06-24 feature plans in one pass (plan approved, user asleep — ran everything that
+doesn't need them). All Ruby + JS parse; app boots/eager-loads clean; registry + route helpers verified
+via runner; full test suite 9/9 green (MIAW path unbroken). NOT committed (commit only when asked), NOT
+deployed, Chess_Coach_MCP builder untouched / never source-published.
+
+### Feature A — MIAW coach sees LIVE state mid-conversation (`setSessionContext`)
+Root cause the user hit ("coach only knows my moves at chat-open"): the whole prechat pipeline is
+conversation-start-only. Fix = the `utilAPI.setSessionContext()` Context-Events API the user surfaced from
+SCRT/FDE (session-start-only `setHiddenPrechatFields` CONFIRMED; `setSessionContext` pushes into a LIVE
+conversation; eng-flagged brittle on rapid-fire → debounce).
+- `agentforce_controller.js`: added `pushLiveContext()` → `setSessionContext([{name:"_AgentContext",
+  value:{valueType:"StructuredValue", value: gameStateForPrechat()}}])`. Fired on ready + on
+  `chess:state-changed`, **debounced 400ms**. Kept `setHiddenPrechatFields` seeding as-is. Guards on
+  isReady + `utilAPI?.setSessionContext`.
+- Also gated MIAW bootstrap on coach mode (only inits when localStorage `coachMode` == "miaw") so it
+  doesn't fight the headless panel.
+- ⚠️ UNVERIFIED (the one real unknown, platform-side): how `_AgentContext` reaches the agent's reasoning —
+  does it populate the existing `@MessagingSession.Chess_*__c` context (zero agent change) or need a
+  builder tweak on Chess_Coach? → BINDING PROBE is verification step 1 (push a known FEN, ask the coach to
+  echo it). Once confirmed, fold into docs/miaw-prechat-to-agent-guide.md (paid-for-once).
+
+### Feature B — headless Agent-API coach + coach-mode toggle (auto-comments on moves)
+- `config/agent_deployments.yml`: added `mode:` discriminator (`miaw` on chess_support) + new
+  `chess_mcp_headless` entry (mode: agent_api, agent_id PLACEHOLDER, my_domain_url, api_base). Secrets NOT
+  here — ENV `AGENTFORCE_CONSUMER_KEY`/`_SECRET`.
+- `app/models/agent_deployment.rb`: new fields (agent_id/my_domain_url/api_base) + `miaw?`/`agent_api?` +
+  class-level `AgentDeployment.agent_api`.
+- `app/services/agentforce_token.rb`: client-credentials OAuth mint (Net::HTTP), cached in Rails.cache w/
+  absolute expiry (skew 60s), `refresh!` for 401s.
+- `app/services/agent_api_client.rb`: start_session/send_message/end_session vs
+  api.salesforce.com/einstein/ai-agent/v1/…, Bearer from AgentforceToken, 120s read timeout, one 401-retry,
+  `TimeoutError`, `self.reply_text` extractor.
+- `app/controllers/agent_chats_controller.rb` + nested routes (`resource :agent_chat` under games):
+  create/message/destroy. **Composes the grounded prompt server-side** ("I'm <name> playing White against a
+  ~<elo> engine. I just played <SAN> (FEN before …). The engine replied <SAN> (FEN now …). Coach me…").
+  Session handle {session_id, sequence, external_key} cached per `agent_session:<user>:<game>`; lazy start;
+  free-text follow-ups supported. Player name derived from email local-part (headless bypasses Contact).
+- `chess_controller.js`: emits `chess:turn-complete` after the computer reply (playerMove{san,fenBefore} via
+  move.before, computerMove{san,fenAfter} via reply.after, difficulty). Sets difficulty from depth on connect.
+- `game_state.js`: added `difficulty {label,elo}` + `difficultyForDepth()` (depth→Elo placeholder map; the
+  upcoming chess.com selector just sets this).
+- `agent_chat_controller.js` (NEW): self-contained chat panel; listens `chess:turn-complete` (debounced
+  300ms, busy-coalesced), POSTs turns + manual questions, lazy session create, DELETE on game-over/unload.
+  Self-gates on coachMode=="headless".
+- `coach_toggle_controller.js` (NEW) + toggle UI in games/show.html.erb: flips localStorage `coachMode` and
+  reloads so exactly one path wires up. (Both new controllers auto-pinned via pin_all_from — no importmap
+  edit needed.)
+
+### TWO USER-OWNED STOPS (everything is built up to these):
+1. **ECA creds** — create the External Client App in Setup (client-credentials, scopes api/refresh_token/
+   chatbot_api/sfap_api, Run-As API-only user) → give consumer key/secret + AGENT_ID(Chess_Coach_MCP) + My
+   Domain. Then: set Heroku/env `AGENTFORCE_CONSUMER_KEY`/`_SECRET`, fill agent_id + my_domain_url in the
+   yaml. Smoke: `rails runner` → AgentforceToken#access_token, then AgentApiClient start/send.
+2. **`_AgentContext` binding probe** (Feature A verify step 1) — decides whether Chess_Coach needs a 1-line
+   builder edit. Code's done either way.
+
+---
+
+## 2026-06-24 07:34 EDT — Headless coach LIVE-credential verified + User Verification last-mile SOLVED
+
+Two big unblocks this morning.
+
+### Headless Agent-API coach proven end-to-end against the real org
+User created the External Client App ("Chess Headless Agent API", API name Chess_Headless_Agent_API,
+Distribution=Local) and supplied the consumer key/secret. Tested against the live org:
+- AgentforceToken#access_token → mints a 2062-char JWT (client-credentials flow + Run-As user correct).
+- AgentApiClient start→send→end round-trip → real coach reply, clean teardown.
+- GROUNDED prompt (composed exactly like the controller, 1.e4 e5 with real FENs) → coach named the
+  "Open Game", confirmed e4 was the engine's top move, recommended Nf3. Grounding via MCP tools works.
+- Bug found + fixed during the test: `Net::HTTP` is NOT autoloaded in this Rails app → added explicit
+  `require "net/http"/"uri"/"json"` to both services. Tests still 9/9.
+- Secrets persisted: added `dotenv-rails` (dev/test group) + gitignored `.env` (local); set Heroku config
+  vars AGENTFORCE_CONSUMER_KEY/SECRET on chess-agent-jwt (release v16). Both confirmed loading from ENV.
+- agent_id (0Xxg8000000neKTCAY, type ExternalCopilot — headless-eligible) + my_domain_url written into
+  agent_deployments.yml (grabbed live via BotDefinition query + org display).
+- NOTE: new code is NOT yet deployed to Heroku (config vars are live, code push pending user go-ahead);
+  NOT committed.
+
+### User Verification last-mile RESOLVED — the "Add User Verification" checkbox was hidden by the edit entry point
+The 2026-06-23 OPEN ITEM (conversations stuck UNAUTH; checkbox "doesn't exist") is SOLVED, and it was a
+Setup-UI inconsistency, not a missing/Beta feature. **Editing an individual SECTION from the channel
+DETAIL page renders a reduced form that omits "Add User Verification"; full Edit from the channels LIST
+VIEW shows it.** Check it there, bind the JSON Web Keyset, save → conversations bind AUTH with a real
+ContactId; MessagingChannel.IsAuthenticated=true. End-to-end verified identity now works. Folded into
+docs/agentforce-user-verification-guide.md (open item → RESOLVED note; Last verified bumped to 2026-06-24).
+General lesson worth remembering: if a Setup field you expect is missing, re-open the record via full Edit
+from the list view before concluding the feature isn't there.

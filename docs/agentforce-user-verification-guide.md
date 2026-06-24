@@ -3,9 +3,11 @@
 Durable, findable-by-name reference for wiring **Salesforce Messaging for In-App and Web
 (MIAW) User Verification** to a custom web app. Edit this in place when a lesson is superseded.
 
-**Last verified:** 2026-06-23 (full Setup confirmed in-org incl. the x5c JWK requirement + open
-keyset↔channel binding item; client API + signing originally confirmed from developer.salesforce.com;
-Setup-side claim mapping pending live confirmation in Phase 4 — see the ⚠️ below).
+**Last verified:** 2026-06-24 (END-TO-END verified identity now WORKING — the last-mile
+keyset↔channel binding was resolved: the "Add User Verification" checkbox is hidden when you Edit
+a section from the channel detail page, but present via full Edit from the channels list view; see
+the RESOLVED note below. Also confirmed in-org: the x5c JWK requirement; client API + signing from
+developer.salesforce.com).
 
 ---
 
@@ -108,16 +110,29 @@ JWK, with x5c) and `identity_jwt.cert.pem`.
 **Success check (one query):** the verified MessagingEndUser has `ContactId` populated and
 `MessagingPlatformKey` contains `AUTH/...` (not `UNAUTH`).
 
-### ⚠️ OPEN ITEM (as of 2026-06-23) — keyset↔channel binding for EXTERNAL sites
+### ⚠️ RESOLVED (2026-06-24) — the "Add User Verification" checkbox is hidden by the WRONG EDIT ENTRY POINT
 
-After the x5c fix + deployment republish, conversations were STILL UNAUTH and
-`MessagingChannel.IsAuthenticated` stayed `false`. The **"Add User Verification" checkbox does
-NOT exist on the channel Edit form for an external site** (it's Experience-Builder/Salesforce-
-site only). There is no exposed channel field or queryable sobject linking the keyset to the
-channel. The canonical setup article `service.miaw_token_based_user_verification_setup.htm` must
-be read **in a browser** (it doesn't render via tooling) to find the external-site activation /
-keyset-to-channel step. MIAW User Verification is **Beta** — confirm with Salesforce if the doc
-step doesn't resolve it. Everything app-side is proven correct; this is the last mile.
+**This was the last-mile blocker, and the cause was a Setup UI inconsistency, not a missing
+feature.** After the x5c fix + republish, conversations were STILL UNAUTH and
+`MessagingChannel.IsAuthenticated` stayed `false` because the keyset was never bound to the
+channel — and the **"Add User Verification" checkbox appeared to not exist** on the channel.
+
+**Root cause:** *which Edit button you click changes which fields render.*
+- ❌ Opening the channel's **detail page** and clicking **Edit on an individual section** (the
+  inline/section-level pencil) renders a REDUCED form that **omits** the "Add User Verification"
+  checkbox. This is the path we kept taking — so the control looked entirely absent.
+- ✅ From the channel **list view** (Messaging Settings → the channels listing), use the **row
+  Edit** action (full-record Edit). That renders the COMPLETE form, where **"Add User
+  Verification"** is present. Check it, select the JSON Web Keyset, save.
+
+So the checkbox is NOT external-site-only / Experience-Builder-only as previously feared — it's
+there for the external-site channel too; the section-level edit on the detail page just doesn't
+show it. **Rule of thumb: if a Setup field you expect is missing, re-open the record via full
+Edit from the list view before concluding the feature doesn't exist.**
+
+**Verify:** after binding, a new conversation's MessagingEndUser has `ContactId` populated and
+`MessagingPlatformKey` contains `AUTH/...` (not `UNAUTH`); `MessagingChannel.IsAuthenticated` is
+`true`. End-to-end verified identity now works.
 
 ## Public key (RS256, registered in Salesforce)
 
