@@ -149,16 +149,28 @@ Retrieve to verify: `sf project retrieve start --metadata "PublicKeyCertificateS
 this was confirmed correct in-org 2026-06-24 (issuer byte-matches; key pair's modulus matches
 Heroku's signing key) — yet conversations still bound UNAUTH, which pointed to the client, below.
 
-### ⚠️ A correct keyset is necessary but NOT sufficient — the WIDGET must actually set the token
-Conversations can STILL bind `UNAUTH` with every static config correct (issuer byte-matches, cert
-active, x5c present, key pair matches Heroku's signing key, Contact exists, `authMode=Auth`) if the
-**client never successfully calls `setIdentityToken` before the conversation opens.** A concrete way
-this happens (hit 2026-06-24): a re-mint **loop** — when the token is rejected, Salesforce fires
-`onEmbeddedMessagingIdentityTokenExpired` immediately; an unconditional re-mint loops (40+
-`/identity_token` hits/sec in the Heroku router log), freezes the tab, and every conversation created
-during the storm opens UNAUTH. Guard the expiry handler (cap re-mints per window). Also: the ESD
-**bootstrap script is cached** — after enabling verification, republish the deployment and
-hard-refresh, or the browser keeps a pre-verification bootstrap.
+### ⚠️ A correct keyset is necessary but NOT sufficient — the TOKEN ENDPOINT must not be HTTP-cached
+Conversations can STILL bind `UNAUTH` / the widget can show **"Something went wrong, please log in
+and try again"** with every static config correct (issuer byte-matches, cert active, x5c present, key
+pair matches Heroku's signing key, Contact exists, `authMode=Auth`). Root cause hit 2026-06-24:
+
+**The Rails token endpoint (`/identity_token`) was returning `304 Not Modified`, so the browser
+reused a CACHED, now-expired token** and Salesforce rejected it. Signature was never the problem
+(the x5c cert's modulus matched the JWK and Heroku's signing key). Two compounding client bugs:
+1. **HTTP caching of the credential.** Rails' `Rack::ETag` adds a weak ETag to the 200, so the
+   browser sends a conditional request and gets a 304, then serves the stale token from cache.
+   `Rack::ETag` skips emitting the ETag **only when the response already has an ETag or
+   `Last-Modified` header — it ignores `Cache-Control` entirely** (rack 3.2 `etag.rb#skip_caching?`).
+   FIX: set `Cache-Control: no-store` (browser must not store the token) **and** set `Last-Modified`
+   so Rack skips the ETag → no 304 → a fresh token every request. (See
+   `IdentityTokensController#prevent_token_caching!`.)
+2. **Re-mint loop.** When the token IS rejected, Salesforce fires
+   `onEmbeddedMessagingIdentityTokenExpired` immediately; an unconditional re-mint loops (40+
+   `/identity_token` hits/sec in the Heroku router log) and freezes the tab; conversations created
+   during the storm open UNAUTH. FIX: guard the expiry handler (cap re-mints per window).
+
+Also: the ESD **bootstrap script is cached** — after enabling verification, republish the deployment
+and hard-refresh, or the browser keeps a pre-verification bootstrap.
 
 **Verify (run AFTER a clean conversation on fixed client code):** the newest MessagingEndUser has
 `ContactId` populated and `MessagingPlatformKey` contains `AUTH/...` (not `UNAUTH`). NOTE:
