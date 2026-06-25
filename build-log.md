@@ -1690,3 +1690,23 @@ duplicating.
 Used the generating-mermaid-diagrams skill for diagram conventions/theming. 25 Rails tests green
 (docs-only change). CLAUDE.md already referenced both files. This closes the original build plan —
 all 7 phases done.
+
+---
+
+## 2026-06-25 — Coach references the player's last move (SAN) — the last parked task
+
+Unparked the deferred "let the coach reference the actual last move" idea (parked 2026-06-23). The
+old note guessed a 6th hidden-prechat field — but the architecture moved on: the MIAW coach now PULLS
+live state every turn (continuity-trap fix), so the clean path is to add the move to that pull, where
+it stays current with zero prechat plumbing. (The headless coach already names the move in its
+Rails-composed prompt, so this is MIAW-only.)
+
+Chain: `/coach/game_state` parses `lastMove` from the PGN (drop move-number + result tokens, take the
+last) → `ChessCoachGetLiveGame` surfaces a `lastMove` output → `Chess_Coach.agent` captures it as
+`LiveLastMove` in the per-turn `get_live_game` pull, and the live-game instruction tells the coach the
+move on screen + to judge "that move"/"my last move" with judge_move (passing the pre-move FEN).
+
+Published+activated → **v12**; verified the COMPILED ACTIVE graph carries BOTH the new lastMove wiring
+AND the subscription gate (applied the v11 lesson — decode the graph, don't trust deploy alone). Live
+end-to-end: deployed `/coach/game_state` returned `lastMove="e6"` for `pgn="1. e4 e6"`. 25 Rails + 6
+Apex tests green. This was the last parked item — the project's backlog is now clear.
