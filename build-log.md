@@ -1476,3 +1476,41 @@ handicap would have silently no-op'd. Confirmed by driving the worker headlessly
 into weak moves (a3, h4, Bf1) while Skill 20 plays the tight best move. (Also burned time on a test
 harness bug: rescanning the buffered UCI lines kept matching a STALE `bestmove`, making every
 position look identical — fixed with a monotonic line cursor. The engine was fine; the probe wasn't.)
+
+---
+
+## 2026-06-25 — Headless coach latency: probe killed the streaming plan; shipped indicator + engine cap
+
+User: "the headless coach latency is pretty rough." Planned to stream the Agent API reply
+(`/messages/stream` SSE → ActionController::Live → ReadableStream). **A Step-0 probe of the live
+`Chess_Coach_MCP` SSE endpoint killed that plan before any code was written** — the single most
+valuable thing this pass did.
+
+THE PROBE (timestamped SSE events against the real agent):
+- Simple Q (no engine): total 8.6s, ALL events at +8.6s.
+- "e4" + name opening: 9.7s, all at the end.
+- Blunder analysis (engine tools): 20s — one PROGRESS_INDICATOR at +8s, then the full 487-char
+  INFORM reply + END_OF_TURN at +20s.
+**Agentforce buffers the entire turn and emits every SSE event (incl. the reply text) in ONE burst at
+END_OF_TURN. Text never arrives progressively.** So end-to-end streaming = same frozen wait, then a
+one-shot dump → ~0 perceived gain for a lot of plumbing. Dropped Lever A entirely. Where the time
+goes: ~8s irreducible planner-LLM baseline (even a no-tool reply), +~12s on tool turns (multiple
+LLM↔MCP round-trips + engine search). The 8s baseline is a planner/model concern (in-builder), left
+out of scope this pass.
+
+SHIPPED INSTEAD (both app/server-side, no agent republish):
+1. **Perceived — animated "thinking" indicator** (`agent_chat_controller.js` + `.agent-dots` CSS).
+   The request stays the sync `fetch(messageUrl)`; while it's in flight we show bouncing dots + a
+   label that advances through stages ("Reading the board" → "Consulting the engine" → "Weighing your
+   options" → "Writing your coaching", holding on the last). Clears the instant the reply/error lands.
+   Honors `prefers-reduced-motion` (static label). Makes the 8–20s wait read as active, not frozen.
+2. **Actual — capped MCP engine time** (`chess-mcp/src/engine.js`, `tools.js`). `DEFAULT_DEPTH` 14→12
+   and a new `DEFAULT_MOVETIME = 700`ms; `analyze()` now issues `go depth D movetime M` (Stockfish
+   stops at whichever limit hits first), threaded through all three engine tools (`explain_move`
+   analyzes twice, so it gains most). Bounds per-call wall-clock predictably on the shared Basic dyno.
+   Local smoke: explain_move 0.51s, analyze 0.24s, verdicts/best-moves unchanged. All 10 MCP tests +
+   23 Rails tests green.
+
+Both Heroku dynos are **Basic** (verified `heroku ps`) — never sleep, so cold-start was NOT the
+problem (ruled out early). Lesson worth keeping: **probe the platform's actual streaming behavior
+before building a streaming UI** — a buffered-turn agent makes token-streaming pointless.

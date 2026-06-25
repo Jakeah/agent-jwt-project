@@ -18,6 +18,25 @@ import { Controller } from "@hotwired/stimulus";
 // fights the MIAW widget.
 const SEND_DEBOUNCE_MS = 300;
 
+// Perceived-latency aid. A coach turn is a SYNCHRONOUS Agent API call: the Agentforce platform
+// buffers the WHOLE turn and returns the reply text in one shot at the end (verified 2026-06-25 by
+// probing the /messages/stream SSE endpoint — every event, incl. the reply, lands in one burst at
+// END_OF_TURN; nothing streams progressively). So real token-streaming buys nothing here. Instead
+// we keep the user oriented during the 8–20s wait with an animated, stage-advancing indicator —
+// it cycles through plausible phases of the agent's work so the wait reads as active, not frozen.
+// The stages are cosmetic (we can't see the agent's true progress); timings are tuned to the
+// observed range and the last stage just holds until the reply arrives.
+const THINKING_STAGES = [
+  "Reading the board",
+  "Consulting the engine",
+  "Weighing your options",
+  "Writing your coaching",
+];
+const THINKING_STAGE_MS = 2800; // advance roughly every few seconds; holds on the last stage
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 export default class extends Controller {
   static values = {
     gameId: Number,
@@ -106,7 +125,7 @@ export default class extends Controller {
       return;
     }
     this.busy = true;
-    const thinkingEl = this.#appendMessage("coach", "Coach is thinking…", { pending: true });
+    const thinking = this.#startThinking();
 
     try {
       await this.#ensureSession();
@@ -116,20 +135,53 @@ export default class extends Controller {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
+      thinking.stop(); // halt the animation before swapping in the final content
       if (!res.ok) {
-        thinkingEl.textContent = data.error || `Coach unavailable (${res.status}).`;
-        thinkingEl.dataset.role = "system";
+        thinking.el.textContent = data.error || `Coach unavailable (${res.status}).`;
+        thinking.el.dataset.role = "system";
+        thinking.el.removeAttribute("data-pending");
         return;
       }
-      thinkingEl.textContent = data.reply || "(no reply)";
-      thinkingEl.removeAttribute("data-pending");
+      thinking.el.textContent = data.reply || "(no reply)";
+      thinking.el.removeAttribute("data-pending");
     } catch (err) {
-      thinkingEl.textContent = "Couldn't reach the coach. Check your connection.";
-      thinkingEl.dataset.role = "system";
+      thinking.stop();
+      thinking.el.textContent = "Couldn't reach the coach. Check your connection.";
+      thinking.el.dataset.role = "system";
+      thinking.el.removeAttribute("data-pending");
     } finally {
       this.busy = false;
       this.#scrollToBottom();
     }
+  }
+
+  // Show an animated "thinking" bubble and advance its label through THINKING_STAGES on a timer,
+  // so the synchronous (and lengthy) agent wait reads as active work rather than a frozen line.
+  // Returns { el, stop } — stop() clears the timer; the caller then sets el.textContent to the
+  // reply/error (which also wipes the animated markup). Honors prefers-reduced-motion (static label).
+  #startThinking() {
+    const el = this.#appendMessage("coach", "", { pending: true });
+
+    if (prefersReducedMotion()) {
+      el.textContent = "Coach is thinking…";
+      return { el, stop() {} };
+    }
+
+    let stage = 0;
+    const dots = '<span class="agent-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+    const paint = () => {
+      el.innerHTML = `<span class="inline-flex items-center gap-2"><span>${THINKING_STAGES[stage]}</span>${dots}</span>`;
+    };
+    paint();
+    const timer = setInterval(() => {
+      // Advance, then hold on the final stage until the reply lands.
+      if (stage < THINKING_STAGES.length - 1) {
+        stage += 1;
+        paint();
+      }
+    }, THINKING_STAGE_MS);
+
+    return { el, stop: () => clearInterval(timer) };
   }
 
   // Start the SF session once, lazily. The server also creates lazily on message, so this is a
