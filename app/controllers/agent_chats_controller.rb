@@ -119,25 +119,39 @@ class AgentChatsController < ApplicationController
 
   # Build the turn's text. A free-text follow-up is sent as-is; otherwise we narrate the completed
   # turn so the coach can ground on the live FEN via its MCP tools.
+  #
+  # IMPORTANT (2026-06-25): lead with the CURRENT FEN and ask the coach to analyze the current
+  # position — do NOT frame it as "explain the move I played" with a before/after FEN pair. The
+  # two-FEN "explain_move" framing was unreliable: the agent would mis-pair the SAN move with a FEN,
+  # its MCP tool would error, and it would bail with "I lost track of your position — resend the
+  # FEN." A single current-FEN "analyze this position" turn grounds reliably (verified live: the
+  # one-FEN shape works, the two-FEN/explain shape fails). The last move is mentioned only as
+  # context; the analysis is always anchored to the current FEN.
   def compose_message
     free_text = params[:text].to_s.strip
     return "#{free_text}#{BREVITY}" if free_text.present?
 
     player = params.dig(:playerMove, :san)
-    fen_before = params.dig(:playerMove, :fenBefore)
     computer = params.dig(:computerMove, :san)
-    fen_after = params.dig(:computerMove, :fenAfter)
+    # The current position is the board AFTER the computer's reply; if the computer hasn't moved
+    # (e.g. the player just delivered mate/stalemate), fall back to the board after the player move.
+    current_fen = params.dig(:computerMove, :fenAfter).presence || params.dig(:playerMove, :fenBefore)
     elo = params.dig(:difficulty, :elo)
     label = params.dig(:difficulty, :label)
 
     parts = []
     parts << "I'm #{player_name} playing White"
     parts << opponent_clause(elo, label)
-    parts << "."
-    parts << " I just played #{player} (FEN before my move: #{fen_before})." if player.present?
-    parts << " The engine replied #{computer} (FEN now: #{fen_after})." if computer.present?
-    parts << " Coach me on my move — name any opening or tactic and flag mistakes, grounding your"
-    parts << " analysis in the current FEN."
+    parts << ". The current position is FEN: #{current_fen}."
+    # Last move as plain context (not an explain-the-move directive — that framing breaks grounding).
+    if player.present? && computer.present?
+      parts << " (I just played #{player} and the engine replied #{computer}.)"
+    elsif player.present?
+      parts << " (I just played #{player}.)"
+    end
+    parts << " Analyze the current position for me — use your engine on this exact FEN, name any"
+    parts << " opening or tactic, and flag mistakes. Don't ask me to resend anything; analyze the"
+    parts << " FEN as given."
     parts << BREVITY
     parts.join
   end

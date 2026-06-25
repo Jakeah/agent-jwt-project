@@ -1580,3 +1580,27 @@ busy-flag-reentrant: each finished request kicks the next. Verified with a headl
 enqueue/drain logic: blitz 5 → sends move 1 then move 5 (2–4 folded); move+question+2moves → question
 preserved, trailing moves folded to the last; sequential non-overlapping → both send. 23 Rails tests
 green.
+
+---
+
+## 2026-06-25 (later still²) — BUG: coach said "I lost track — resend the FEN". Fixed the prompt framing.
+
+After the queue fix, the user saw a different failure: the coach itself replying *"It looks like I
+lost track of your position — could you resend the FEN?"* — repeatedly, on normal turns. Reproduced
+it on a SINGLE clean turn (not a coalescing/session-history issue at all).
+
+Root cause: the per-turn prompt framed the turn as **"explain the move I played"** with a
+before-FEN + after-FEN PAIR + a SAN move. The agent mis-pairs the SAN with a FEN, its MCP tool
+(`explain_move`) errors, and it bails asking for a resend. A/B against the live agent nailed it:
+- "Analyze this CURRENT FEN" (one FEN) → ✅ grounds, real eval, every time.
+- "explain_move" framing (two FENs + move) / "use analyze_fen on this FEN" → ❌ "technical issue" /
+  "resend the FEN".
+
+Fix (`compose_message`): **lead with the CURRENT FEN and ask the agent to analyze the current
+position**; mention the last move only as parenthetical context, not as an explain-the-move
+directive; add "Don't ask me to resend anything; analyze the FEN as given." Current FEN = the board
+after the computer's reply (falls back to after the player move if the computer didn't move, e.g.
+mate). Verified live across fresh sessions: grounds reliably — e.g. correctly flagged "Ne5 hangs the
+knight to Qxe5, Black winning, Scotch Game." 23 Rails tests green. App-side only (no builder/MCP
+change). Lesson: with this agent, **give ONE current FEN and say "analyze it" — never hand it a
+before/after FEN pair and ask it to explain a move.**
