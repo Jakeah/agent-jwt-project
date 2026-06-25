@@ -64,6 +64,7 @@ export default class extends Controller {
     this.turnTimer = null;
     this.pendingTurn = null;
     this.started = false;
+    this.sendQueue = []; // turns/questions waiting behind an in-flight coach request (see #post)
 
     this.#render();
   }
@@ -104,27 +105,54 @@ export default class extends Controller {
     if (!text) return;
     input.value = "";
     this.#appendMessage("you", text);
-    this.#post({ text });
+    this.#enqueue({ kind: "question", payload: { text } });
   }
 
   // --- sends ---
   #sendTurn(turn) {
-    const summary = this.#turnSummary(turn);
-    this.#appendMessage("move", summary);
-    this.#post({
-      playerMove: turn.playerMove,
-      computerMove: turn.computerMove,
-      difficulty: turn.difficulty,
+    this.#enqueue({
+      kind: "turn",
+      turn,
+      payload: {
+        playerMove: turn.playerMove,
+        computerMove: turn.computerMove,
+        difficulty: turn.difficulty,
+      },
     });
   }
 
-  async #post(payload) {
-    if (this.busy) {
-      // Coalesce: if a request is in flight, drop a "thinking" note rather than overlap turns.
-      this.#appendMessage("system", "…(coach still thinking, skipped)");
-      return;
+  // Queue a coach request and kick the drainer. A coach turn is a SYNCHRONOUS Agent API call that
+  // can take 8–15s, and the server tracks a per-session sequence, so requests MUST run one at a
+  // time — never overlap. Previously an in-flight request caused new moves to be DROPPED ("…coach
+  // still thinking, skipped"), which desynced the coach from the board: it would comment on a stale
+  // move and never catch up. Instead we queue. Consecutive MOVE turns coalesce to the latest (only
+  // the current position matters, and it saves credits); QUESTIONS are never dropped or merged.
+  #enqueue(item) {
+    if (item.kind === "turn") {
+      const last = this.sendQueue[this.sendQueue.length - 1];
+      if (last?.kind === "turn") {
+        // Supersede the queued-but-not-yet-sent move with this newer one (latest board wins).
+        this.sendQueue[this.sendQueue.length - 1] = item;
+        this.#noteCoalesced();
+        this.#drain();
+        return;
+      }
     }
+    this.sendQueue.push(item);
+    this.#drain();
+  }
+
+  // Process the queue one item at a time. Re-entrant-safe via the busy flag: each completed request
+  // calls #drain again, so the loop continues until the queue is empty.
+  async #drain() {
+    if (this.busy) return;
+    const item = this.sendQueue.shift();
+    if (!item) return;
+
     this.busy = true;
+    // Show the move summary right before we actually send that turn (so the transcript order
+    // matches send order, even after coalescing).
+    if (item.kind === "turn") this.#appendMessage("move", this.#turnSummary(item.turn));
     const thinking = this.#startThinking();
 
     try {
@@ -132,17 +160,16 @@ export default class extends Controller {
       const res = await fetch(this.messageUrlValue, {
         method: "POST",
         headers: this.#headers(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(item.payload),
       });
       const data = await res.json().catch(() => ({}));
       thinking.stop(); // halt the animation before swapping in the final content
       if (!res.ok) {
         thinking.el.textContent = data.error || `Coach unavailable (${res.status}).`;
         thinking.el.dataset.role = "system";
-        thinking.el.removeAttribute("data-pending");
-        return;
+      } else {
+        thinking.el.textContent = data.reply || "(no reply)";
       }
-      thinking.el.textContent = data.reply || "(no reply)";
       thinking.el.removeAttribute("data-pending");
     } catch (err) {
       thinking.stop();
@@ -152,7 +179,19 @@ export default class extends Controller {
     } finally {
       this.busy = false;
       this.#scrollToBottom();
+      // Drain the next queued item (a move played while this request was in flight).
+      if (this.sendQueue.length) this.#drain();
     }
+  }
+
+  // A queued move was superseded by a newer one before it could send — let the user know their
+  // intermediate moves were folded into the latest position (collapsed to a single subtle note).
+  #noteCoalesced() {
+    const transcript = this.element.querySelector("[data-agent-chat-transcript]");
+    const last = transcript?.lastElementChild;
+    if (last?.dataset?.coalesced === "true") return; // already showing the note; don't stack
+    const note = this.#appendMessage("system", "Skipping ahead to your latest move…");
+    note.dataset.coalesced = "true";
   }
 
   // Show an animated "thinking" bubble and advance its label through THINKING_STAGES on a timer,

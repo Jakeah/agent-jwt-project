@@ -1559,3 +1559,24 @@ edit but stays in code (no §8 exposure, version-controlled, reversible). Live A
 reply ~700–785c → ~275–300c; time 15.6s→8.2s on the comparable run (variance is high — one run still
 hit ~11.8s — but worst case dropped and length consistently <half). Coach still names the opening +
 gives a tip, just tighter. 23 Rails tests green.
+
+---
+
+## 2026-06-25 (later still) — BUG: blitzing moves desynced the coach. Fixed with a send queue.
+
+User hit it: playing several moves before the coach replied to the first one "bugs out and loses
+what's happening." Root cause in `agent_chat_controller.js`: `#post` had a `busy` guard that, on an
+in-flight request, **DROPPED** the new turn ("…coach still thinking, skipped") and returned. So the
+coach finished commenting on the FIRST (now stale) move and never saw the moves played during its
+~10s think — the transcript desynced from the board.
+
+Fix: replaced the drop-on-busy coalescing with a **serial send queue** (`this.sendQueue` +
+`#enqueue`/`#drain`). A coach turn is a synchronous Agent API call and the server tracks a per-session
+sequence, so requests MUST stay one-at-a-time — but now they QUEUE instead of dropping. Consecutive
+MOVE turns **coalesce to the latest** (only the current board matters; saves credits and guarantees
+the coach's last word matches the live position); a subtle "Skipping ahead to your latest move…" note
+shows once when that happens. Free-text QUESTIONS are never dropped or merged. `#drain` is
+busy-flag-reentrant: each finished request kicks the next. Verified with a headless sim of the
+enqueue/drain logic: blitz 5 → sends move 1 then move 5 (2–4 folded); move+question+2moves → question
+preserved, trailing moves folded to the last; sequential non-overlapping → both send. 23 Rails tests
+green.
