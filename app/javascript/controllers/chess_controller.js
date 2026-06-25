@@ -4,6 +4,11 @@ import { Engine } from "engine";
 import { updateGameState, getLevel } from "game_state";
 import { PIECE_SVG } from "pieces";
 
+// Minimum time the computer's reply is held back, so even instant low-level moves land with a
+// natural "thinking" beat rather than snapping in. Cosmetic only — see #playUserMove. If the engine
+// search already took longer than this (higher levels), there's no extra wait.
+const MIN_COMPUTER_THINK_MS = 650;
+
 // Full piece names, for spelling a move out loud ("Knight to f3").
 const PIECE_NAMES = { k: "King", q: "Queen", r: "Rook", b: "Bishop", n: "Knight", p: "Pawn" };
 
@@ -117,19 +122,28 @@ export default class extends Controller {
     // level (handicapped Skill Level + its own depth); #analyze stays full strength (honest eval bar).
     this.thinking = true;
     this.#setStatus("Computer is thinking…");
+    const startedAt = Date.now();
     this.engine.bestMove(this.chess.fen(), { depth: this.level.depth, skill: this.level.skill }).then((mv) => {
-      let reply = null;
-      if (mv) {
-        reply = this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
-        if (reply) this.lastMove = reply;
-      }
-      this.thinking = false;
-      this.#render();
-      this.#persist();
-      // Announce the completed turn (player move + computer reply) so the headless MCP coach can
-      // auto-comment. chess.js verbose moves carry .before/.after FENs, .san, .color.
-      this.#announceTurn(move, reply);
-      if (!this.#checkGameOver()) this.#analyze();
+      // Hold for a minimum visible "beat" so the reply doesn't snap in instantly at low levels
+      // (depth 4 resolves in ms). PURELY COSMETIC: the turn payload and the chess:turn-complete
+      // event are unchanged — #announceTurn still fires once, after the reply is applied, with the
+      // same move/reply objects (same before/after FENs + SANs). It only shifts WHEN the event
+      // fires by a fraction of a second, which the coach panel's debounce + serial queue ignore.
+      const wait = Math.max(0, MIN_COMPUTER_THINK_MS - (Date.now() - startedAt));
+      setTimeout(() => {
+        let reply = null;
+        if (mv) {
+          reply = this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+          if (reply) this.lastMove = reply;
+        }
+        this.thinking = false;
+        this.#render();
+        this.#persist();
+        // Announce the completed turn (player move + computer reply) so the headless MCP coach can
+        // auto-comment. chess.js verbose moves carry .before/.after FENs, .san, .color.
+        this.#announceTurn(move, reply);
+        if (!this.#checkGameOver()) this.#analyze();
+      }, wait);
     });
   }
 
@@ -238,7 +252,7 @@ export default class extends Controller {
         cells += `
           <div data-action="click->chess#onSquareClick" data-square="${square}"
                class="relative aspect-square flex items-center justify-center
-                      cursor-pointer ${base} ${ring} ${lastRing} ${capRing} hover:brightness-105 transition">
+                      cursor-pointer ${base} ${ring} ${lastRing} ${capRing} hover:brightness-105 transition-all duration-300 ease-out">
             ${dot}${piece}
           </div>`;
       });
