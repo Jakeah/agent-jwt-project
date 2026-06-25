@@ -37,6 +37,11 @@ const prefersReducedMotion = () =>
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
+// Styling for a subscription-gated ("locked") coach reply — a distinct amber/lock bubble so the
+// upsell reads as a paywall, not a normal coach answer. Prefixed with 🔒 in the rendered text.
+const LOCKED_BUBBLE_CLASS =
+  "mr-auto max-w-[85%] rounded-2xl px-3 py-2 leading-snug bg-amber-50 text-amber-800 border border-amber-200";
+
 export default class extends Controller {
   static values = {
     gameId: Number,
@@ -167,6 +172,12 @@ export default class extends Controller {
       if (!res.ok) {
         thinking.el.textContent = data.error || `Coach unavailable (${res.status}).`;
         thinking.el.dataset.role = "system";
+      } else if (data.gated) {
+        // Subscription gate (server short-circuited before the agent): render the upsell as a
+        // distinct "locked" bubble rather than a normal coach reply.
+        thinking.el.textContent = `🔒 ${data.reply}`;
+        thinking.el.dataset.role = "locked";
+        thinking.el.className = LOCKED_BUBBLE_CLASS;
       } else {
         thinking.el.textContent = data.reply || "(no reply)";
       }

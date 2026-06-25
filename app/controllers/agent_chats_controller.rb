@@ -16,6 +16,13 @@ class AgentChatsController < ApplicationController
 
   SESSION_TTL = 2.hours # cache the SF session handle for the length of a long game
 
+  # The upsell shown when an unsubscribed user tries to use the coach. Coaching is a paid feature;
+  # everyone can play + open the coach, but only subscribed Contacts get analysis. Mirrors the
+  # wording the MIAW agent uses when its in-agent gate trips, so both coaches say the same thing.
+  SUBSCRIPTION_REQUIRED_MSG =
+    "Coaching is a premium feature — you'll need an active subscription to unlock live analysis " \
+    "and move-by-move coaching. You can keep playing the computer for free in the meantime!".freeze
+
   # Latency lever (proven 2026-06-25): an Agent API turn's wall-clock is dominated by OUTPUT-TOKEN
   # generation, not tool calls — constraining the reply length ~halves turn time (terse ~5.5s vs a
   # multi-paragraph ~17s). We can't shorten the agent's built-in verbosity without a builder edit,
@@ -40,6 +47,14 @@ class AgentChatsController < ApplicationController
   #   { playerMove: {san, fenBefore}, computerMove: {san, fenAfter}, difficulty: {label, elo} }
   #   { text: "why was that a blunder?" }
   def message
+    # Deterministic subscription gate (the hard gate for the headless path). The Agent API session
+    # is bypassUser, so the agent can't see who the user is — we check HERE, where we know
+    # current_user, and short-circuit before spending an agent turn. Reads the same Salesforce
+    # Contact.Is_Subscribed__c the MIAW coach gates on (single source of truth). Fails closed.
+    unless Subscription.active?(current_user.email)
+      return render json: { reply: SUBSCRIPTION_REQUIRED_MSG, gated: true }
+    end
+
     handle = session_handle
     seq = handle[:sequence] + 1
     text = compose_message
