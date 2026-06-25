@@ -1392,3 +1392,42 @@ continuity/history.)
 Captured as a "read this first" section in docs/miaw-prechat-to-agent-guide.md (the ConversationId
 query is the diagnostic). Diagnostics (DEBUG=true) still in agentforce_controller.js — strip once the
 Apex-pull path is in and verified.
+
+---
+
+## 2026-06-25 — Verified coach SOLVED end-to-end (continuity trap, conversation reset, live pull)
+
+Closed the multi-day saga. The verified MIAW coach now (a) can be reset to a fresh conversation
+in-page and (b) tracks the live board every turn. Both confirmed live (session 0dwg8000000Ih3JAAS:
+Chess_Player_Email__c=jacob.connors3@gmail.com + FEN set + Contact linked + repeated
+/coach/game_state 200s).
+
+THE CHAIN OF DISCOVERIES (each ruled out before the next):
+1. Verified conversation is keyed on the JWT `sub`. clearSession + launchChat both re-resume the SAME
+   ConversationId for the same email — even after upgrading WebV1→WebV2 (in-place upgrade; the v2 code
+   snippet is byte-identical to v1, only server behavior changes; unlocks launchChat
+   shouldStartNewConversation + setSessionContext, neither of which actually broke continuity).
+   launchChat gotcha: must call it on onEmbeddedMessagingButtonCreated, not onEmbeddedMessagingReady
+   (else "API not available before onEmbeddedMessagingButtonCreated").
+2. RESET FIX: mint the JWT with a unique subject — sub = local+r<nonce>@domain. New subject → SCRT2
+   creates a NEW conversation. Proven: +r subject made a fresh ConversationId; same-email always reused.
+   Routing flow strips the +tag back to the real email for Contact match (split formula: Raw_Subject
+   extracts uid:, Verified_Email canonicalizes by dropping the +tag).
+3. v9 moved get_live_game from before_reasoning (entry-only → stale) into reasoning (per-turn). But it
+   STILL didn't fire because it keyed on @MessagingEndUser.ContactId, which arrives NULL in agent
+   context at reasoning time (even though the flow sets it on the record + the bot maps it). This also
+   explains why the by-name greeting never worked — get_player_name starved on the same null ContactId.
+4. LIVE-STATE FIX (v10): carry the player's EMAIL through the prechat pipeline (new Chess_Player_Email
+   custom param → flow var → MessagingSession.Chess_Player_Email__c → linked var) and key get_live_game
+   on it (Apex now takes an email input used directly; Rails /coach/game_state?email= already existed).
+   Email rides the same channel that reliably delivers FEN. The .agent publish AUTO-wired the field into
+   Agent Context (no manual Edit-Included-Fields step needed — a source-driven-publish win).
+5. LAST GOTCHA: new prechat field landed null while FEN landed — same setHiddenPrechatFields call. Cause:
+   ESD not republished (Gotcha 0 — SCRT2 drops unpublished hidden fields). Republish + a fresh-subject
+   reset conversation (so the field lands on a post-republish CREATE) → everything populated.
+
+Net architecture for "app data → verified agent, always current":
+  identity JWT (unique sub for reset) → prechat (FEN + player email) → flow writes MessagingSession.*__c
+  → agent reads email var, runs get_live_game(email) EVERY turn → Rails returns the live board.
+ContactId is NOT in the path (unreliable in agent context). Folded into
+docs/miaw-prechat-to-agent-guide.md (rewrote the "continuity trap" section as SOLVED).

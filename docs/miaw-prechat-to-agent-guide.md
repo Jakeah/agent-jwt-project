@@ -1,59 +1,62 @@
 # Passing app data into an Agentforce agent via MIAW hidden prechat fields
 
-**Last verified:** 2026-06-24 (pipeline works for ANONYMOUS conversations; ⚠️ does NOT stay current
-for VERIFIED users — see "The verified-user continuity trap" below, a hard architectural limit found
-2026-06-24.)
+**Last verified:** 2026-06-25 (SOLVED end-to-end for VERIFIED users — see "The verified-user
+continuity trap" below. Coach tracks the live board every turn via a per-turn server-side pull keyed
+by the player's EMAIL carried through prechat; conversations are reset on demand via a unique JWT
+subject. Both confirmed live.)
 
 How to get a value from your web app (here: the live chess FEN/PGN) into an **Agentforce service
 agent**'s reasoning, through **Messaging for In-App and Web (Enhanced Web Chat)** hidden prechat
-fields. This is the durable, findable answer to a costly dead-end we hit.
+fields. This is the durable, findable answer to a multi-day dead-end we paid for once.
 
-## ⚠️⚠️ The verified-user continuity trap (root cause, 2026-06-24) — READ THIS FIRST
+## ⚠️⚠️ The verified-user continuity trap (root cause + the SOLUTION, 2026-06-25) — READ THIS FIRST
 
+### The trap
 **Hidden prechat fields are consumed ONLY at conversation CREATION. A verified (User-Verification /
 AUTH) user has ONE persistent conversation that every later chat-open RESUMES — it is never
-re-created — so `setHiddenPrechatFields` is a silent no-op on every resume, and the
-MessagingSession custom fields (`Chess_FEN__c` etc.) stay at whatever the FIRST open captured (or
-null).** This is NOT a config bug, NOT an SCRT2 front-door drop (Gotcha 0), NOT a client timing race
-— it's how verified continuity works.
+re-created — so `setHiddenPrechatFields` is a silent no-op on every resume, and the MessagingSession
+custom fields stay at whatever the FIRST open captured (or null).** NOT a config bug, NOT (only) an
+SCRT2 front-door drop, NOT a client timing race — it's how verified continuity works.
 
-**How we proved it (the one query that nails it):** group today's MessagingSessions by
-`ConversationId`.
-- **Anonymous (`UNAUTH/NA/uid:<random>`):** every chat-open = a NEW `ConversationId` (1 session
-  each) → prechat runs at create → `Chess_FEN__c` populates EVERY time. ✅
-- **Verified (`AUTH/<config>/uid:<email>`):** 13 chat-opens across 3 hours ALL shared ONE
-  `ConversationId` (`0dwg8000000ISQrAAO`). Only the FIRST (its create) carried a FEN; all 12 resumes
-  → `Chess_FEN__c` null. ❌ The browser resumes it via the `continuityAccessToken` request (visible
-  in DevTools Network when the widget boots).
-
+**The conversation is keyed on the JWT `sub` (subject).** SCRT2 links a verified conversation to the
+subject; re-verifying with the SAME `sub` ALWAYS re-links the SAME conversation. Proven: `clearSession`
++ `launchChat({shouldStartNewConversation:true})` (even on Enhanced Web Chat **v2**) reopened the same
+`ConversationId`. Diagnostic query — group MessagingSessions by `ConversationId`:
 ```sql
 SELECT CreatedDate, Chess_FEN__c, ConversationId, MessagingEndUser.MessagingPlatformKey
 FROM MessagingSession WHERE CreatedDate = TODAY ORDER BY CreatedDate DESC
--- AUTH rows all share one ConversationId; only the earliest has a non-null Chess_FEN__c.
+-- AUTH rows for one email all share ONE ConversationId; only the earliest has a non-null Chess_FEN__c.
 ```
 
-**Why the obvious fixes don't help:** re-seeding prechat on every board change / `connect()` is
-correct but irrelevant — there's no new conversation to consume it. The symptom is `null` (not a
-stale/opening FEN), because on a resume the field is simply never written, vs. a timing bug which
-would capture the opening position.
+### What did NOT work (each ruled out with evidence)
+- **Re-seeding prechat** on board change / `connect()` — correct but irrelevant; no new conversation to consume it.
+- **`utilAPI.setSessionContext([...])`** (Context Events API, the documented mid-conversation push) — **not a function** on this widget build.
+- **`clearSession` + `launchChat({shouldStartNewConversation:true})`** — even on v2 (we upgraded WebV1→WebV2 in-place; in-place upgrade, snippet byte-identical), it re-resumed the same conversation because the subject was unchanged. NOTE: `launchChat` must be called after `onEmbeddedMessagingButtonCreated`, NOT `onEmbeddedMessagingReady`, or it rejects "API not available before onEmbeddedMessagingButtonCreated".
+- **Keying the per-turn pull on `@MessagingEndUser.ContactId`** — the agent context var arrives **NULL at reasoning time** even though the routing flow sets `MessagingEndUser.ContactId` on the record and the bot maps it. (Same reason the by-name greeting never fired — `get_player_name` starved too.) Do not rely on ContactId reaching agent context.
 
-**The intended mid-conversation fix is also unavailable here:**
-`embeddedservice_bootstrap.utilAPI.setSessionContext([...])` (Context Events API) is the *only*
-documented way to push context into an ALREADY-OPEN conversation — but on this widget build
-`utilAPI.setSessionContext` **is not a function** (console: "utilAPI.setSessionContext not
-available"). So for the verified path, BOTH client→agent freshness channels are dead:
-prechat (consumed once at create) and setSessionContext (not exposed).
+### The SOLUTION (two independent fixes, both confirmed live 2026-06-25)
+**1. Fresh conversation on demand = mint the identity JWT with a UNIQUE `sub`.** A never-seen subject
+makes SCRT2 create a NEW conversation. Use a plus-tag: `sub = local+r<nonce>@domain`. The routing flow
+then **strips the `+tag`** back to the real email for Contact match (formula:
+`IF(AND(FIND("+",sub)>0, FIND("@",sub)>0), LEFT(sub,FIND("+",sub)-1) & MID(sub,FIND("@",sub),255), sub)`).
+Verified: a `+r` subject produced a brand-new `ConversationId` where every same-email attempt reused the old one.
 
-**The fix that works for verified users: an Apex action the agent calls each turn** that re-fetches
-live game state server-side (keyed by the verified `@MessagingEndUser.ContactId` → the player's
-email → the Rails game record, which is persisted every move). This is pull, not push, so continuity
-is irrelevant. It also doubles as the headless-coach grounding path. (Alternative, rejected:
-end + recreate the conversation on each open — forces prechat to re-run but destroys the verified
-user's conversation history/continuity, which is the whole point of verification.)
+**2. Coach sees live state every turn = pull server-side, keyed by EMAIL carried through prechat.**
+An Apex action (`ChessCoachGetLiveGame`) the agent runs at the **start of every reasoning turn**
+(inside `reasoning:`, NOT `before_reasoning` which only runs on subagent ENTRY) re-fetches the live
+game from Rails (`/coach/game_state?email=`). Key it on **`Chess_Player_Email`** — the player's email
+carried through the SAME prechat pipeline as the FEN (it reliably delivers; ContactId does not). Pull,
+not push, so continuity is irrelevant.
 
-**Rule of thumb:** if a verified MIAW user's prechat-backed fields are stale/null but anonymous
-users are fine, do NOT chase the prechat pipeline (below) — it's the continuity trap. Group by
-`ConversationId` first.
+**Critical: after adding any new hidden prechat field (e.g. `Chess_Player_Email`), REPUBLISH the ESD.**
+SCRT2 drops hidden fields not in the *published* field set (Gotcha 0). Symptom that nails it: the new
+field is `null` while an existing field (FEN) lands — through the SAME `setHiddenPrechatFields` call.
+And the field only lands on a conversation CREATED AFTER the republish (a resumed/old conversation
+won't pick it up — combine the republish with a fresh-subject reset).
+
+**Rule of thumb:** verified MIAW user's prechat fields stale/null but anonymous users fine → continuity
+trap. Group by `ConversationId`. For freshness use the email-keyed per-turn pull; for a clean restart
+use a unique-subject JWT. Never depend on `@MessagingEndUser.ContactId` in agent context.
 
 ## The dead end (what does NOT work)
 
