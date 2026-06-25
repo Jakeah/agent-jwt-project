@@ -82,6 +82,14 @@ export function trimPgn(pgn, max = PGN_MAX) {
   return (out || pgn.slice(0, budget)) + ellipsis;
 }
 
+// The signed-in player's email, rendered into a meta tag by the layout (authenticated only).
+// Passed as a hidden prechat field so the coach can pull the live game by email — the reliable
+// identity path, since @MessagingEndUser.ContactId arrives null in the agent's context at reasoning.
+function playerEmail() {
+  if (typeof document === "undefined") return "";
+  return document.querySelector('meta[name="chess-player-email"]')?.content || "";
+}
+
 // Flatten the snapshot into the string key/value shape MIAW hidden prechat fields expect.
 // Keys here must match the custom parameters / channel variable names configured on the MIAW
 // channel (Phase 4) so they land as conversation variables the coach agent can read.
@@ -92,5 +100,6 @@ export function gameStateForPrechat() {
     Chess_Turn: state.turn === "w" ? "White" : "Black",
     Chess_Move_Count: String(state.moveCount),
     Chess_Status: state.status || "active",
+    Chess_Player_Email: playerEmail(),
   };
 }

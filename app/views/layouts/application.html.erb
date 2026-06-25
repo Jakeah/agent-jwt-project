@@ -8,6 +8,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
+    <%# The signed-in player's email, for the MIAW coach: passed as a hidden prechat field so the
+        agent can pull the live game by email (the reliable path; @MessagingEndUser.ContactId arrives
+        null in agent context). Only rendered when authenticated. %>
+    <% if user_signed_in? %><meta name="chess-player-email" content="<%= current_user.email %>"><% end %>
 
     <%= yield :head %>
 
