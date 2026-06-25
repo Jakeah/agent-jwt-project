@@ -16,6 +16,15 @@ class AgentChatsController < ApplicationController
 
   SESSION_TTL = 2.hours # cache the SF session handle for the length of a long game
 
+  # Latency lever (proven 2026-06-25): an Agent API turn's wall-clock is dominated by OUTPUT-TOKEN
+  # generation, not tool calls — constraining the reply length ~halves turn time (terse ~5.5s vs a
+  # multi-paragraph ~17s). We can't shorten the agent's built-in verbosity without a builder edit,
+  # but every turn's prompt is composed HERE, so we bake the concision directive into the prompt
+  # itself. Appended to BOTH the move-coaching turn and free-text follow-ups. Kept tight: lead with
+  # the point, cap the length, plain prose (the panel renders plain text, so no markdown overhead).
+  BREVITY = " Reply in at most 2–3 short sentences. Lead with the key verdict or idea, then one " \
+            "concrete tip. Be direct and conversational; no headings, lists, or markdown.".freeze
+
   # POST /games/:game_id/agent_chat — explicitly start (or reuse) a session. Optional: the panel
   # can call this on open to warm the session, but `message` also creates lazily, so this is just
   # a convenience handle.
@@ -112,7 +121,7 @@ class AgentChatsController < ApplicationController
   # turn so the coach can ground on the live FEN via its MCP tools.
   def compose_message
     free_text = params[:text].to_s.strip
-    return free_text if free_text.present?
+    return "#{free_text}#{BREVITY}" if free_text.present?
 
     player = params.dig(:playerMove, :san)
     fen_before = params.dig(:playerMove, :fenBefore)
@@ -129,6 +138,7 @@ class AgentChatsController < ApplicationController
     parts << " The engine replied #{computer} (FEN now: #{fen_after})." if computer.present?
     parts << " Coach me on my move — name any opening or tactic and flag mistakes, grounding your"
     parts << " analysis in the current FEN."
+    parts << BREVITY
     parts.join
   end
 

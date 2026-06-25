@@ -1549,3 +1549,13 @@ is a system-prompt/persona edit in the **builder** for `Chess_Coach_MCP` (safe �
 SOURCE-PUBLISHING the MCP agent, not builder edits). Flagged to the user for a verbosity decision
 before changing the coach's voice. Secondary levers (lighter reasoning model tier; fewer tool
 round-trips) are smaller given generation dominates.
+
+APPLIED (app-side, no builder edit needed): rather than editing the builder, we bake the concision
+directive into the per-turn prompt Rails composes (`AgentChatsController#compose_message`) — a new
+`BREVITY` constant appended to BOTH the move-coaching turn and free-text follow-ups: *"Reply in at
+most 2–3 short sentences. Lead with the key verdict or idea, then one concrete tip. Be direct and
+conversational; no headings, lists, or markdown."* This gets the same effect as a builder persona
+edit but stays in code (no §8 exposure, version-controlled, reversible). Live A/B on the e4 turn:
+reply ~700–785c → ~275–300c; time 15.6s→8.2s on the comparable run (variance is high — one run still
+hit ~11.8s — but worst case dropped and length consistently <half). Coach still names the opening +
+gives a tip, just tighter. 23 Rails tests green.
