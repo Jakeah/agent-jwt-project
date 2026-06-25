@@ -1514,3 +1514,38 @@ SHIPPED INSTEAD (both app/server-side, no agent republish):
 Both Heroku dynos are **Basic** (verified `heroku ps`) — never sleep, so cold-start was NOT the
 problem (ruled out early). Lesson worth keeping: **probe the platform's actual streaming behavior
 before building a streaming UI** — a buffered-turn agent makes token-streaming pointless.
+
+---
+
+## 2026-06-25 (later) — Planner-baseline investigation: latency = OUTPUT LENGTH, not tools
+
+Chased the ~8s/turn "baseline." Drove controlled turns against the live `Chess_Coach_MCP` and timed
+them; the result overturned the "tools are the cost" assumption:
+
+| turn | tools | total | reply |
+|---|---|---|---|
+| name opening | 1 | 3.35s | 117c |
+| pure chat | 0 | 7.59s | 226c |
+| blunder check | 2 | 8.61s | 493c |
+| analyze | 1 | 4.9–12.0s | 589c |
+| pure chat (long) | 0 | 14.63s | 457c |
+
+The fastest turn USED a tool; the slowest used NONE. Tool count doesn't predict latency — **reply
+length does.** Confirmed with a same-task / different-length-constraint test (2 samples each):
+- terse (≤12 words): **5.4–5.8s** / ~104c
+- normal: 7.7–12.2s / ~600c
+- verbose (multi-paragraph): 14.7–19.8s / ~1700c
+
+So per turn ≈ a ~5s floor (auth + session start + first-token) **+ time roughly linear in OUTPUT
+TOKENS GENERATED.** The MCP engine (now capped at depth12/700ms) is a minor contributor; the planner
+LLM's *generation* dominates. (Reasoning model isn't in source — org-default, builder-set; couldn't
+read it via tooling and the Aura plan-trace fetch 401s without a Lightning session, but the timing
+data is conclusive regardless.)
+
+HIGHEST-LEVERAGE LEVER (builder-only, NOT yet applied — it's a product call):
+**tighten the coach's instructions to be concise** (2–4 sentences, lead with the verdict/eval, skip
+multi-paragraph prose). Empirically that ~halves turn time (~12s→~5.5s) with zero infra change. This
+is a system-prompt/persona edit in the **builder** for `Chess_Coach_MCP` (safe — §8 forbids
+SOURCE-PUBLISHING the MCP agent, not builder edits). Flagged to the user for a verbosity decision
+before changing the coach's voice. Secondary levers (lighter reasoning model tier; fewer tool
+round-trips) are smaller given generation dominates.
