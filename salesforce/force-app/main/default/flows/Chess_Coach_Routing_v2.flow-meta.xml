@@ -337,10 +337,20 @@
         </rules>
     </decisions>
     <formulas>
-        <description>Extract the verified subject (email) from the MessagingPlatformKey, which ends with "uid:&lt;sub&gt;" — e.g. v2/iamessage/AUTH/ChessVerification/uid:player@example.com.</description>
-        <name>Verified_Email</name>
+        <description>Raw verified subject extracted from the MessagingPlatformKey, which ends with "uid:&lt;sub&gt;" — e.g. v2/iamessage/AUTH/ChessVerification/uid:player@example.com. May carry a "+r&lt;nonce&gt;" reset tag (see Verified_Email).</description>
+        <name>Raw_Subject</name>
         <dataType>String</dataType>
         <expression>MID({!Get_End_User.MessagingPlatformKey}, FIND("uid:", {!Get_End_User.MessagingPlatformKey}) + 4, 255)</expression>
+    </formulas>
+    <formulas>
+        <description>The verified subject canonicalized to the real Contact email by stripping any "+tag" sub-address from the local part. The "New chat" reset mints a JWT with sub = local+r&lt;nonce&gt;@domain so SCRT2 keys it as a NEW conversation (the verified conversation is keyed on the JWT subject); this strips that tag back to local@domain so Get_Contact still matches the real Contact. No "+" → returns the subject unchanged (anonymous UNAUTH uuids have no "@" either, so the AND guard leaves them untouched).</description>
+        <name>Verified_Email</name>
+        <dataType>String</dataType>
+        <expression>IF(
+    AND(FIND("+", {!Raw_Subject}) &gt; 0, FIND("@", {!Raw_Subject}) &gt; 0),
+    LEFT({!Raw_Subject}, FIND("+", {!Raw_Subject}) - 1) &amp; MID({!Raw_Subject}, FIND("@", {!Raw_Subject}), 255),
+    {!Raw_Subject}
+)</expression>
     </formulas>
     <sourceTemplate>AiCopilot__LanguageChat</sourceTemplate>
     <start>
