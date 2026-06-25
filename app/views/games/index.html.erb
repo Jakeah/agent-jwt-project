@@ -22,10 +22,12 @@
     </div>
   <% else %>
     <div class="grid gap-3 sm:grid-cols-2">
-      <% @games.each do |game| %>
+      <%# @games is newest-first, so each row's per-user number is total minus its position (top
+          row = your latest game). Computed from the list to avoid an N+1 of COUNT queries. %>
+      <% @games.each_with_index do |game, index| %>
         <%= link_to game, class: "group block bg-white rounded-2xl shadow-card border border-slate-100 hover:border-brand-300 hover:shadow-lift transition p-5" do %>
           <div class="flex items-center justify-between mb-3">
-            <span class="font-display font-bold text-ink-900">Game #<%= game.id %></span>
+            <span class="font-display font-bold text-ink-900">Game #<%= @games.size - index %></span>
             <% if game.finished? %>
               <span class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                 <%= game.status %>
