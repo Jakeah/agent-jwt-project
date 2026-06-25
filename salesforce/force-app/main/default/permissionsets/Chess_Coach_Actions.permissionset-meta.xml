@@ -33,6 +33,12 @@
         <apexClass>ChessCoachGetLiveGame</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <!-- Deterministic subscription gate: the agent calls this in before_reasoning to decide whether
+         to coach (paid) or show the upsell. Reads Contact.Is_Subscribed__c (FLS granted below). -->
+    <classAccesses>
+        <apexClass>ChessCoachCheckSubscription</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <!-- Access to the external credential principal behind the ChessCoachApi Named Credential,
          so the agent user's Apex callouts can authenticate to the chess REST facade. -->
     <externalCredentialPrincipalAccesses>
@@ -84,6 +90,13 @@
     </fieldPermissions>
     <fieldPermissions>
         <field>MessagingSession.Chess_Status__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <!-- FLS read on the Contact subscription flag so ChessCoachCheckSubscription can read it
+         (custom fields aren't readable by default; the standard Contact.Email needs no entry). -->
+    <fieldPermissions>
+        <field>Contact.Is_Subscribed__c</field>
         <readable>true</readable>
         <editable>true</editable>
     </fieldPermissions>

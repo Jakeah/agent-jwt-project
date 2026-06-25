@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Subscribed__c</fullName>
+    <label>Is Subscribed</label>
+    <type>Checkbox</type>
+    <defaultValue>false</defaultValue>
+    <description>Whether this Contact has an active paid subscription to the chess coaching feature. The deterministic gate for coaching: both coaches read this single field. The MIAW coach reads it via the ChessCoachCheckSubscription Apex action; the headless coach is gated in Rails (the Subscription service SOQL-queries this field with the ECA token, since the Agent API session is bypassUser and the agent can't see the user). No payment gateway — flip this in Setup for the demo. Subscribed → coaching works; not subscribed → "subscription required" message.</description>
+</CustomField>
