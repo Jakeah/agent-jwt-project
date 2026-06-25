@@ -22,13 +22,25 @@ and widget embed are config-driven via `config/agent_deployments.yml`.
   Omni-Flow Update Records → MessagingSession custom field → agent `@MessagingSession.X__c`), and
   why the direct `source: @context.*`/prechat binding does NOT work.
 
-## External references (cross-project, update-proof anchor)
+## Reusable skills built from this project (`skills/`, also installed at `~/.claude/skills/`)
 
-- **Native MCP tool actions** (`mcpTool://`) — reverse-engineered syntax + discovery steps + gotchas
-  from this org's working agent, captured in the `developing-agentforce` skill at
-  `~/.claude/skills/developing-agentforce/references/mcp-tool-actions.md`. Pointer kept here too so
-  it survives a skill update overwriting the skill's own internal link. Relevant to the in-progress
-  migration of the 4 Chess Coach engine actions off the Apex→REST shim onto native MCP.
+These two skills distill this build's hard-won Agentforce learnings. Source of truth is the repo
+copy under `skills/` (version-controlled, text-only); a working copy is installed in
+`~/.claude/skills/`. Shareable zips in `dist/skills/`. Install notes in `skills/README.md`.
+
+- **`embedding-agentforce-messaging`** — MIAW / Enhanced Web Chat embed + User Verification (RS256
+  JWT, keyset, AuthScheme), hidden-prechat pipeline, the **verified-user continuity trap** + fixes
+  (unique-subject reset; email-keyed per-turn pull; ContactId-is-null-in-context), Enhanced Web Chat
+  v1↔v2, and SPA lifecycle gotchas.
+- **`developing-agentforce-mcp`** — native `mcpTool://` actions: server registration, target syntax,
+  and the critical **§8** rule (add MCP actions in the **builder**, never source-publish, or they
+  validate but never fire). Full detail in
+  `skills/developing-agentforce-mcp/references/mcp-tool-actions.md`.
+
+> NOTE: the earlier pointer to `~/.claude/skills/developing-agentforce/references/mcp-tool-actions.md`
+> is dead — the `agentforce-adlc` plugin update (0.7.0) overwrote that skill's `references/` dir and
+> wiped the file. The content was reconstructed from `build-log.md` into the standalone
+> `developing-agentforce-mcp` skill above. Keep MCP learnings in our OWN skill, not the plugin's.
 
 ## Key facts
 

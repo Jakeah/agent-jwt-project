@@ -46,3 +46,6 @@
 # Public key (*.public.pem) IS tracked for reference; private key must stay out of the repo.
 *.private.pem
 
+
+# Shareable skill zips (binaries — regenerate from skills/; not version-controlled)
+/dist/
