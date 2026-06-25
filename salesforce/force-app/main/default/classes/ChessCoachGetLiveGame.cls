@@ -22,9 +22,14 @@ public with sharing class ChessCoachGetLiveGame {
 
     public class Request {
         @InvocableVariable(
+            label='Player Email'
+            description='The signed-in player\'s email (from the Chess_Player_Email prechat field). Preferred identity key — pass this when available.'
+        )
+        public String email;
+
+        @InvocableVariable(
             label='Contact Id'
-            description='Id of the verified player\'s Contact (from @MessagingEndUser.ContactId)'
-            required=true
+            description='Fallback: Id of the verified player\'s Contact (from @MessagingEndUser.ContactId), used only if Player Email is blank.'
         )
         public String contactId;
     }
@@ -73,7 +78,10 @@ public with sharing class ChessCoachGetLiveGame {
         r.moveCount = '';
         r.status = '';
 
-        String email = emailForContact(req.contactId);
+        // Prefer the email passed straight from prechat (reliable); fall back to resolving it from
+        // the Contact only if no email was supplied (@MessagingEndUser.ContactId arrives null in
+        // agent context, which is why email-from-prechat is the primary path).
+        String email = String.isNotBlank(req.email) ? req.email.trim() : emailForContact(req.contactId);
         if (String.isBlank(email)) {
             r.summary = 'No verified player email is available, so I can\'t look up the live game.';
             return r;

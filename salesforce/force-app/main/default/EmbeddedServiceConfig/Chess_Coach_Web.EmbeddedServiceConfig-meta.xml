@@ -47,6 +47,14 @@
             <isRequired>false</isRequired>
             <messagingChannelParameterType>Custom</messagingChannelParameterType>
         </embeddedServiceFormFields>
+        <embeddedServiceFormFields>
+            <displayOrder>-1</displayOrder>
+            <formField>Chess_Player_Email</formField>
+            <formFieldType>Text</formFieldType>
+            <isHidden>true</isHidden>
+            <isRequired>false</isRequired>
+            <messagingChannelParameterType>Custom</messagingChannelParameterType>
+        </embeddedServiceFormFields>
         <isActive>true</isActive>
     </embeddedServiceForms>
     <embeddedServiceMessagingChannel>

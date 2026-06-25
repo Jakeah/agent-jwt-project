@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Chess_Player_Email__c</fullName>
+    <label>Chess Player Email</label>
+    <type>Text</type>
+    <length>255</length>
+    <required>false</required>
+    <description>The signed-in player's real email, passed from the web app via MIAW hidden prechat field and written here by the Omni routing flow. The Chess Coach agent reads it (@MessagingSession.Chess_Player_Email__c) and passes it to ChessCoachGetLiveGame, which pulls the live board from Rails keyed by email — bypassing the unreliable @MessagingEndUser.ContactId context, which arrives null at reasoning time.</description>
+</CustomField>

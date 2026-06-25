@@ -24,6 +24,16 @@
     </customParameters>
     <customParameters>
         <actionParameterMappings>
+            <actionParameterName>Chess_Player_Email</actionParameterName>
+        </actionParameterMappings>
+        <externalParameterName>Chess_Player_Email</externalParameterName>
+        <masterLabel>Chess_Player_Email</masterLabel>
+        <maxLength>255</maxLength>
+        <name>Chess_Player_Email</name>
+        <parameterDataType>String</parameterDataType>
+    </customParameters>
+    <customParameters>
+        <actionParameterMappings>
             <actionParameterName>Chess_Move_Count</actionParameterName>
         </actionParameterMappings>
         <externalParameterName>Chess_Move_Count</externalParameterName>

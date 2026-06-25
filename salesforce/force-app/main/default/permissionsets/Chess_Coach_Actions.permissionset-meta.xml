@@ -63,6 +63,11 @@
         <editable>true</editable>
     </fieldPermissions>
     <fieldPermissions>
+        <field>MessagingSession.Chess_Player_Email__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
         <field>MessagingSession.Chess_PGN__c</field>
         <readable>true</readable>
         <editable>true</editable>

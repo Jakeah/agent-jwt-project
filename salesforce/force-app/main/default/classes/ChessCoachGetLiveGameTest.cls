@@ -50,6 +50,25 @@ private class ChessCoachGetLiveGameTest {
     }
 
     @isTest
+    static void emailInputIsUsedDirectlyWithoutContactLookup() {
+        // The primary path: email passed straight from prechat, NO contactId, NO Contact seeded.
+        Test.setMock(HttpCalloutMock.class, new Mock(200,
+            '{"found":true,"fen":"rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",' +
+            '"pgn":"1. e4 c5","turn":"White","moveCount":1,"status":"active"}'));
+        ChessCoachGetLiveGame.Request r = new ChessCoachGetLiveGame.Request();
+        r.email = 'jacob.connors3@gmail.com';
+
+        Test.startTest();
+        List<ChessCoachGetLiveGame.Result> out =
+            ChessCoachGetLiveGame.getLiveGame(new List<ChessCoachGetLiveGame.Request>{ r });
+        Test.stopTest();
+
+        System.assertEquals(true, out[0].found);
+        System.assertEquals('White', out[0].turn);
+        System.assert(out[0].summary.contains('White to move'), 'summary: ' + out[0].summary);
+    }
+
+    @isTest
     static void handlesNoActiveGame() {
         Id contactId = seedContact();
         Test.setMock(HttpCalloutMock.class, new Mock(200, '{"found":false,"reason":"player has no games"}'));

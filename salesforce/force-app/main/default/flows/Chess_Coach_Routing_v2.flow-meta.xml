@@ -156,6 +156,12 @@
             </value>
         </inputAssignments>
         <inputAssignments>
+            <field>Chess_Player_Email__c</field>
+            <value>
+                <elementReference>Chess_Player_Email</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
             <field>Chess_Move_Count__c</field>
             <value>
                 <elementReference>Chess_Move_Count</elementReference>
@@ -363,6 +369,13 @@
     <status>Active</status>
     <variables>
         <name>Chess_FEN</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+    <variables>
+        <name>Chess_Player_Email</name>
         <dataType>String</dataType>
         <isCollection>false</isCollection>
         <isInput>true</isInput>
