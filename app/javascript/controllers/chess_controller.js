@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { Chess } from "chess.js";
 import { Engine } from "engine";
-import { updateGameState, difficultyForDepth } from "game_state";
+import { updateGameState, getLevel } from "game_state";
 import { PIECE_SVG } from "pieces";
 
 // Full piece names, for spelling a move out loud ("Knight to f3").
@@ -39,7 +39,7 @@ export default class extends Controller {
     fen: String,
     moveUrl: String,
     finishUrl: String,
-    depth: { type: Number, default: 12 },
+    depth: { type: Number, default: 12 }, // analysis depth (eval bar). Opponent depth comes from the level.
   };
 
   // Track the most recent move (both colors) so the left panel can show its notation + spoken form.
@@ -51,16 +51,28 @@ export default class extends Controller {
     this.selected = null;   // currently selected square, e.g. "e2"
     this.legalTargets = [];
     this.thinking = false;
-    // Opponent strength derived from search depth (until the Elo selector lands). Published in
-    // the shared snapshot so the headless coach can say "vs a ~1200 engine".
-    this.difficulty = difficultyForDepth(this.depthValue);
+    // Opponent level (Skill Level + depth + the Elo we advertise) — a user-picked client preference.
+    // The selector dispatches "chess:level-changed"; we re-arm so the NEXT computer move uses it.
+    this.level = getLevel();
+    this.difficulty = { label: this.level.label, elo: this.level.elo };
+    this.onLevelChanged = this.#handleLevelChanged.bind(this);
+    window.addEventListener("chess:level-changed", this.onLevelChanged);
     this.#render();
     this.#publishState({ difficulty: this.difficulty });
     this.#analyze();
   }
 
   disconnect() {
+    window.removeEventListener("chess:level-changed", this.onLevelChanged);
     this.engine?.terminate();
+  }
+
+  // The opponent strength was changed mid-game. Adopt it for subsequent moves (the in-flight move,
+  // if any, finishes at the old strength — fine) and republish so the coaches cite the new Elo.
+  #handleLevelChanged(event) {
+    this.level = event.detail?.level || getLevel();
+    this.difficulty = { label: this.level.label, elo: this.level.elo };
+    this.#publishState({ difficulty: this.difficulty });
   }
 
   // --- interaction ---
@@ -101,10 +113,11 @@ export default class extends Controller {
 
     if (this.#checkGameOver()) return;
 
-    // Computer replies after a short beat, then we re-analyze.
+    // Computer replies after a short beat, then we re-analyze. The opponent plays at the selected
+    // level (handicapped Skill Level + its own depth); #analyze stays full strength (honest eval bar).
     this.thinking = true;
     this.#setStatus("Computer is thinking…");
-    this.engine.bestMove(this.chess.fen(), { depth: this.depthValue }).then((mv) => {
+    this.engine.bestMove(this.chess.fen(), { depth: this.level.depth, skill: this.level.skill }).then((mv) => {
       let reply = null;
       if (mv) {
         reply = this.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });

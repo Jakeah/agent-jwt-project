@@ -14,25 +14,56 @@ const state = {
   moveCount: 0,       // full moves played
   lastEval: null,     // { scoreCp, mate } from the engine, White's perspective
   status: "active",
-  // Opponent strength the headless coach mentions ("vs a ~1200 engine"). Defaulted from the
-  // engine's search depth for now; the upcoming chess.com-Elo selector will set this directly
-  // (Stockfish UCI_LimitStrength/UCI_Elo). { label, elo } — elo is approximate.
-  difficulty: { label: "Intermediate", elo: 1200 },
+  // Opponent strength the headless coach mentions ("vs a ~1300 engine"). Set from the selected
+  // level (see LEVELS / setLevel). { label, elo } — elo is approximate.
+  difficulty: { label: "Intermediate", elo: 1300 },
 };
 
-// Rough search-depth → playing-strength mapping, until the Elo selector lands. Stockfish at low
-// fixed depth plays far below its ceiling; these are deliberately modest, demo-friendly numbers.
-const DEPTH_TO_DIFFICULTY = [
-  { maxDepth: 4, label: "Beginner", elo: 600 },
-  { maxDepth: 8, label: "Casual", elo: 900 },
-  { maxDepth: 12, label: "Intermediate", elo: 1200 },
-  { maxDepth: 16, label: "Advanced", elo: 1600 },
+// Discrete opponent levels — the single source of truth for the strength picker. Each tier controls
+// how the computer MOVES: `skill` = Stockfish "Skill Level" (0–20; lower = weaker/blunder-prone)
+// and `depth` = its search depth. The eval bar is NOT affected by this — it always analyzes at full
+// strength so the coaching stays honest; the level only handicaps the opponent's own play. `elo` is
+// an approximate label the coach mentions. Expert == the analysis engine's own strength.
+export const LEVELS = [
+  { id: "beginner",     label: "Beginner",     elo: 600,  skill: 0,  depth: 4 },
+  { id: "casual",       label: "Casual",       elo: 900,  skill: 4,  depth: 6 },
+  { id: "intermediate", label: "Intermediate", elo: 1300, skill: 8,  depth: 9 },
+  { id: "advanced",     label: "Advanced",     elo: 1700, skill: 14, depth: 11 },
+  { id: "expert",       label: "Expert",       elo: 2100, skill: 20, depth: 12 },
 ];
 
-export function difficultyForDepth(depth) {
-  const tier = DEPTH_TO_DIFFICULTY.find((t) => depth <= t.maxDepth);
-  const { label, elo } = tier || { label: "Expert", elo: 2000 };
-  return { label, elo };
+const DEFAULT_LEVEL_ID = "intermediate";
+const LEVEL_KEY = "chessLevel";
+
+export function levelById(id) {
+  return LEVELS.find((l) => l.id === id) || LEVELS.find((l) => l.id === DEFAULT_LEVEL_ID);
+}
+
+// The current opponent level — a client preference persisted in localStorage (no server state),
+// shared by the board (engine params) and the coaches (the strength they cite).
+export function getLevel() {
+  try {
+    return levelById(window.localStorage.getItem(LEVEL_KEY));
+  } catch {
+    return levelById(DEFAULT_LEVEL_ID); // localStorage blocked → default
+  }
+}
+
+// Set the opponent level: persist it, mirror its strength into the shared snapshot (so the coaches
+// pick it up at once), and announce it so the live board re-arms the engine for the next move. The
+// chess controller listens for "chess:level-changed"; game_state stays the one writer of difficulty.
+export function setLevel(id) {
+  const level = levelById(id);
+  try {
+    window.localStorage.setItem(LEVEL_KEY, level.id);
+  } catch {
+    /* localStorage blocked — the in-page event still applies the choice for this session */
+  }
+  updateGameState({ difficulty: { label: level.label, elo: level.elo } });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("chess:level-changed", { detail: { level } }));
+  }
+  return level;
 }
 
 export function updateGameState(patch) {

@@ -7,6 +7,14 @@
 //
 // Both share one worker; calls are serialized through a simple queue so overlapping
 // requests don't cross their `bestmove`/`info` lines.
+//
+// Strength: the computer's MOVE can be weakened via Stockfish's "Skill Level" option (0–20; lower
+// blunders more), set per-call right before `go` so it can't bleed into the analysis. Pass
+// { skill } to bestMove for a handicapped opponent; OMIT it for evaluate() so the eval bar always
+// reflects full-strength, honest analysis regardless of the selected opponent level.
+
+// Stockfish "Skill Level" range. 20 == full strength (the engine treats >=20 as no handicap).
+const FULL_SKILL = 20;
 
 export class Engine {
   constructor(workerUrl = "/stockfish/stockfish.js") {
@@ -20,14 +28,16 @@ export class Engine {
     this.#send("isready");
   }
 
-  // Resolve the engine's preferred move from a position.
-  bestMove(fen, { depth = 12 } = {}) {
-    return this.#run(fen, depth).then((r) => r.bestMoveUci ? this.#parseUci(r.bestMoveUci) : null);
+  // Resolve the engine's preferred move from a position. Pass { skill } (0–20) to handicap the
+  // opponent's choice; omit it for full strength.
+  bestMove(fen, { depth = 12, skill = FULL_SKILL } = {}) {
+    return this.#run(fen, depth, skill).then((r) => r.bestMoveUci ? this.#parseUci(r.bestMoveUci) : null);
   }
 
   // Resolve a position evaluation (centipawns from side-to-move's perspective, or mate-in-N).
+  // Always full strength — the analysis must be honest no matter how weak the opponent is set.
   evaluate(fen, { depth = 12 } = {}) {
-    return this.#run(fen, depth).then((r) => ({
+    return this.#run(fen, depth, FULL_SKILL).then((r) => ({
       scoreCp: r.scoreCp,
       mate: r.mate,
       bestMoveUci: r.bestMoveUci,
@@ -40,9 +50,9 @@ export class Engine {
 
   // --- internals ---
 
-  #run(fen, depth) {
+  #run(fen, depth, skill) {
     return new Promise((resolve) => {
-      this.queue.push({ fen, depth, resolve });
+      this.queue.push({ fen, depth, skill, resolve });
       this.#drain();
     });
   }
@@ -51,6 +61,11 @@ export class Engine {
     if (this.current || this.queue.length === 0) return;
     this.current = this.queue.shift();
     this.lastInfo = { scoreCp: null, mate: null, bestMoveUci: null };
+    // Set the per-call skill before the search. Serialized through the queue, so this can't race
+    // with another request's `go`. We always emit it (incl. the full-strength 20) so a weakened
+    // move never leaks into the next full-strength analyze, and vice-versa.
+    const skill = Math.max(0, Math.min(FULL_SKILL, this.current.skill ?? FULL_SKILL));
+    this.#send(`setoption name Skill Level value ${skill}`);
     this.#send(`position fen ${this.current.fen}`);
     this.#send(`go depth ${this.current.depth}`);
   }
