@@ -1431,3 +1431,48 @@ Net architecture for "app data → verified agent, always current":
   → agent reads email var, runs get_live_game(email) EVERY turn → Rails returns the live board.
 ContactId is NOT in the path (unreliable in agent context). Folded into
 docs/miaw-prechat-to-agent-guide.md (rewrote the "continuity trap" section as SOLVED).
+
+---
+
+## 2026-06-25 — Productized the "New chat" reset + added an opponent skill-level picker
+
+Two app-side features. Both verified locally (Rails suite green: 23 runs; Stockfish behavior
+confirmed by headless worker probe).
+
+### 1. "New chat" reset is now a real button (no console script)
+The reset's actual mechanism was always "mint a JWT with a unique subject" (the verified
+conversation is keyed on `sub`; clearSession+launchChat alone only RESUME — the continuity trap).
+Until now that unique subject was injected by a console `fetch`-override hack. Productized it:
+- `/identity_token?reset=<nonce>` → `IdentityToken` splices the nonce in as a `+r<nonce>`
+  sub-address (`local+r<nonce>@domain`). Non-alphanumerics stripped (tag-safe); blank/garbage/nil
+  nonce falls back to the plain email so we never mint an unmatched subject. The routing flow's
+  existing `Verified_Email` formula strips the `+r<nonce>` tag back to the real email → Contact
+  still matches. Round-trip unit-tested both sides.
+- `agentforce_controller.js`: the ↻ New chat button rotates a STICKY nonce
+  (`localStorage["agentforce:resetNonce:<email>"]`) then runs the proven clearSession → ready →
+  buttonCreated → launchChat sequence. Sticky because the token-expiry re-mint must reuse the SAME
+  subject, or it would silently fork the thread mid-chat. Namespaced per-email; cleared on sign-out
+  (sign-out = clean slate). `setIdentityToken()` now appends `&reset=<nonce>` whenever one is set.
+  Turned RESET_DEBUG off (the cure was the subject, not the event ordering).
+
+### 2. Opponent skill-level picker (Beginner → Expert)
+- `game_state.js` now owns the `LEVELS` table (single source of truth): each tier has an `elo`
+  label + Stockfish `skill` (0–20) + search `depth`. `getLevel`/`setLevel` persist to
+  `localStorage["chessLevel"]`, mirror `{label,elo}` into the shared snapshot, and dispatch
+  `chess:level-changed`. Replaced the old depth-guessing `difficultyForDepth` helper.
+- `engine.js`: `bestMove(fen,{depth,skill})` emits `setoption name Skill Level value <skill>` before
+  each `go` (serialized through the existing queue, so no race). `evaluate()` ALWAYS uses full
+  strength (20) — the eval bar stays honest regardless of opponent level. We always emit the option
+  (incl. 20) so a weak move can't leak into the next analysis or vice-versa.
+- `chess_controller.js`: computer move uses the level's skill+depth; reacts to `chess:level-changed`
+  mid-game (next move adopts it, no reload). `level_select_controller.js` + a styled `<select>` in
+  the game header render `LEVELS` and call `setLevel` on change.
+- The headless MCP coach already composes "against a ~<elo>-rated engine (<label>)" from the
+  snapshot's `difficulty`, so the picker drives the strength the coach cites with zero coach changes.
+
+GOTCHA (paid for once): the vendored asm.js Stockfish (ddugovic multi-variant) supports
+`Skill Level` but its option list does NOT include `UCI_LimitStrength`/`UCI_Elo` — an Elo-based
+handicap would have silently no-op'd. Confirmed by driving the worker headlessly: Skill 0 scatters
+into weak moves (a3, h4, Bf1) while Skill 20 plays the tight best move. (Also burned time on a test
+harness bug: rescanning the buffered UCI lines kept matching a STALE `bestmove`, making every
+position look identical — fixed with a monotonic line cursor. The engine was fine; the probe wasn't.)
