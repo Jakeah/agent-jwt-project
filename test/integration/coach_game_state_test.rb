@@ -40,6 +40,7 @@ class CoachGameStateTest < ActionDispatch::IntegrationTest
     assert_equal @game.id, body["gameId"]
     assert_equal "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2", body["fen"]
     assert_equal "1. e4 c5", body["pgn"]
+    assert_equal "c5", body["lastMove"]     # most recent SAN, parsed from the PGN
     assert_equal "White", body["turn"]      # FEN field 2 = "w"
     assert_equal 1, body["moveCount"]       # FEN field 6 = "2" → 1 full move completed
     assert_equal "active", body["status"]

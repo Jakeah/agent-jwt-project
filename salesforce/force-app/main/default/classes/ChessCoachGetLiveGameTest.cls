@@ -31,7 +31,7 @@ private class ChessCoachGetLiveGameTest {
         Id contactId = seedContact();
         Test.setMock(HttpCalloutMock.class, new Mock(200,
             '{"found":true,"gameId":42,"fen":"rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",' +
-            '"pgn":"1. e4 c5","turn":"White","moveCount":1,"status":"active"}'));
+            '"pgn":"1. e4 c5","lastMove":"c5","turn":"White","moveCount":1,"status":"active"}'));
 
         ChessCoachGetLiveGame.Request r = new ChessCoachGetLiveGame.Request();
         r.contactId = contactId;
@@ -44,6 +44,7 @@ private class ChessCoachGetLiveGameTest {
         System.assertEquals(true, out[0].found);
         System.assertEquals('White', out[0].turn);
         System.assertEquals('1', out[0].moveCount);
+        System.assertEquals('c5', out[0].lastMove);
         System.assert(out[0].fen.startsWith('rnbqkbnr/pp1ppppp'));
         System.assert(out[0].summary.contains('White to move'), 'summary: ' + out[0].summary);
         System.assert(out[0].summary.contains('1. e4 c5'));

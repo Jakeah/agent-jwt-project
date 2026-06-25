@@ -44,6 +44,9 @@ public with sharing class ChessCoachGetLiveGame {
         @InvocableVariable(label='PGN' description='Moves so far in Portable Game Notation')
         public String pgn;
 
+        @InvocableVariable(label='Last Move' description='The most recent move in SAN (e.g. "Bxc6") — the move shown on screen, for grounding "was that a good move?"')
+        public String lastMove;
+
         @InvocableVariable(label='Side To Move' description='"White" or "Black" — whose turn it is now')
         public String turn;
 
@@ -74,6 +77,7 @@ public with sharing class ChessCoachGetLiveGame {
         r.found = false;
         r.fen = '';
         r.pgn = '';
+        r.lastMove = '';
         r.turn = '';
         r.moveCount = '';
         r.status = '';
@@ -106,6 +110,7 @@ public with sharing class ChessCoachGetLiveGame {
 
         r.fen = str(body.get('fen'));
         r.pgn = str(body.get('pgn'));
+        r.lastMove = str(body.get('lastMove'));
         r.turn = str(body.get('turn'));
         r.moveCount = str(body.get('moveCount'));
         r.status = str(body.get('status'));

@@ -47,6 +47,7 @@ class CoachGameStatesController < ApplicationController
       gameId: game.id,
       fen: game.fen,
       pgn: game.pgn.to_s,
+      lastMove: last_san(game.pgn),
       turn: side == "b" ? "Black" : "White",
       # Full moves COMPLETED so far: before White's move N, (N-1) are done; before Black's, N-1 too
       # (White's Nth is played but the pair isn't complete). Matches game_state.js's moveCount.
@@ -54,6 +55,16 @@ class CoachGameStatesController < ApplicationController
       status: game.status,
       updatedAt: game.updated_at.utc.iso8601,
     }
+  end
+
+  # The most recent move in SAN, parsed from the PGN, so the coach can reference the exact on-screen
+  # notation ("was Bxc6 a good move?") instead of re-deriving it from the FEN. Drop move-number
+  # tokens ("12." / "12...") and any trailing result token; the last remaining token is the move.
+  def last_san(pgn)
+    tokens = pgn.to_s.split(/\s+/).reject do |t|
+      t.match?(/\A\d+\.+\z/) || %w[1-0 0-1 1/2-1/2 *].include?(t)
+    end
+    tokens.last.to_s
   end
 
   # Constant-time bearer check against COACH_PULL_TOKEN (Heroku config var / .env). A missing token

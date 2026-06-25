@@ -77,6 +77,8 @@ variables:
         description: "Live current position (FEN), pulled fresh this turn. Pass to the analysis tools."
     LivePGN: mutable string = ""
         description: "Live moves so far (PGN), pulled fresh this turn."
+    LiveLastMove: mutable string = ""
+        description: "The most recent move in SAN (e.g. Bxc6) — the move shown on screen this turn. Reference it directly when the player asks about 'that move' / 'my last move'."
     LiveTurn: mutable string = ""
         description: "Live side to move (White/Black), pulled fresh this turn."
     LiveMoveCount: mutable string = ""
@@ -124,6 +126,7 @@ start_agent coach:
                     with email = @variables.Chess_Player_Email
                     set @variables.LiveFEN = @outputs.fen
                     set @variables.LivePGN = @outputs.pgn
+                    set @variables.LiveLastMove = @outputs.lastMove
                     set @variables.LiveTurn = @outputs.turn
                     set @variables.LiveMoveCount = @outputs.moveCount
                     set @variables.LiveStatus = @outputs.status
@@ -159,8 +162,10 @@ start_agent coach:
                 | You can see the player's current game (live, as of right now).
                   Moves so far (PGN): {!@variables.LivePGN}
                   Current position (FEN): {!@variables.LiveFEN}
+                  The player's most recent move was {!@variables.LiveLastMove} (this is the move on screen now).
                   It is {!@variables.LiveTurn} to move. Moves played: {!@variables.LiveMoveCount}. Game status: {!@variables.LiveStatus}.
                   When the player asks about "this position", "my move", or "the game", use THIS FEN with the analysis tools.
+                  When they ask about "that move" or "my last move", they mean {!@variables.LiveLastMove}: judge it with judge_move, passing the FEN of the position BEFORE it.
             if @variables.IsSubscribed == True and @variables.LiveFEN == "" and @variables.Chess_FEN != "":
                 | You can see the player's current game.
                   Moves so far (PGN): {!@variables.Chess_PGN}
@@ -252,6 +257,9 @@ start_agent coach:
                     is_displayable: False
                 pgn: string
                     description: "Moves played so far in PGN"
+                    is_displayable: False
+                lastMove: string
+                    description: "The most recent move in SAN (e.g. Bxc6) — the move shown on screen"
                     is_displayable: False
                 turn: string
                     description: "Side to move: White or Black"
