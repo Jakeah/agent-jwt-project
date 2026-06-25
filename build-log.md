@@ -1651,3 +1651,17 @@ Pieces:
 §8 respected: all agent edits are to `Chess_Coach` (Apex/MIAW), safe to source-publish; `Chess_Coach_MCP`
 is untouched (its gate is in Rails). Verified the SOQL path end-to-end live (subscribed→true,
 unknown→false, blank→false).
+
+### Follow-up — MIAW gate wasn't firing: active version was still PRE-gate
+Headless gated correctly immediately; MIAW still coached Jordan (unsubscribed). Diagnosis: the
+`.agent` source edits had NOT been published+activated, so the org's ACTIVE version was still v10
+(pre-gate). Confirmed by retrieving the active GenAiPlannerBundle and grepping the compiled
+`_graph.json` (plaintext AND base64-decoded) — zero `check_subscription`/`IsSubscribed` tokens.
+(Note: the gate fails CLOSED, so if it had been live, Jordan would have been blocked even on a check
+failure — the only way he gets coached is the gate being ABSENT from the running agent. That
+asymmetry is the fast tell.) Fix: `sf agent publish authoring-bundle --api-name Chess_Coach` → v11,
+`sf agent activate --version 11`. Re-verified the now-active v11 compiled graph CONTAINS the gate
+(action wired into the planner, not just present in metadata). Retrieved the v11 bundle into source.
+LESSON: for an agent change, verify the **compiled, ACTIVE version** carries it (decode the planner
+graph) — source edits + Apex deploy are necessary but NOT sufficient; publish+activate is the step
+that makes it live.
