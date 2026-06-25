@@ -1665,3 +1665,28 @@ asymmetry is the fast tell.) Fix: `sf agent publish authoring-bundle --api-name 
 LESSON: for an agent change, verify the **compiled, ACTIVE version** carries it (decode the planner
 graph) — source edits + Apex deploy are necessary but NOT sufficient; publish+activate is the step
 that makes it live.
+
+---
+
+## 2026-06-25 — Phase 7 docs (architecture + demo script) — the last plan item
+
+Wrote the two Phase-7 deliverables that CLAUDE.md already pointed at but didn't exist yet. Kept them
+ABOVE the two existing deep-dive guides (user-verification, prechat) — cross-referencing rather than
+duplicating.
+
+- **docs/architecture-and-build.md** — the what/why. Mermaid diagrams (validated: balanced braces +
+  3 box / 2 alt / 5 end on the sequence): system landscape, the verified-identity handoff sequence
+  (with the expiry re-mint + clearSession/unique-subject branches), the per-coach state+gating split,
+  and the SOMA/MOMA generalization. Consolidated "paid for once" gotchas section pulls every hard-won
+  lesson into one findable place (x5c, AuthScheme, hidden Setup field, token caching, continuity trap,
+  ContactId-null, MCP §8, verify-compiled-active-version, Agent-API-buffers-the-turn, Skill-Level-not-
+  Elo, McpServerDefinition naming). Brought it current to TODAY's system (two coaches + subscription
+  gating + skill levels), not the original plan.
+- **docs/demo-script.md** — presenter runbook. The free-vs-paid story across both coaches using the
+  three personas (Sam/Jacob subscribed, Jordan unsubscribed): play free → MCP coach subscribed → MCP
+  paywall (Jordan) → MIAW paywall → MIAW subscribed → prove the AUTH binding via MessagingSession
+  SOQL → contrast recap. Plus a live-troubleshooting table (sub cache bust, v11 active, New chat reset).
+
+Used the generating-mermaid-diagrams skill for diagram conventions/theming. 25 Rails tests green
+(docs-only change). CLAUDE.md already referenced both files. This closes the original build plan —
+all 7 phases done.
