@@ -9,7 +9,13 @@ import { Chess } from "chess.js";
 import { analyze } from "./engine.js";
 import { nameOpening } from "./openings.js";
 
-export const DEFAULT_DEPTH = 14;
+// Default search bounds. depth 12 is plenty for move-level coaching, and DEFAULT_MOVETIME caps
+// wall-clock so a tactical position can't run long on the shared (slow) Heroku dyno — Stockfish
+// stops at whichever limit it hits first (see engine.js). This is the actual-latency lever: it
+// shortens the engine portion of an agent turn (explain_move analyzes TWICE, so it benefits most),
+// with predictable per-call timing. A caller may still pass an explicit higher depth to override.
+export const DEFAULT_DEPTH = 12;
+export const DEFAULT_MOVETIME = 700; // ms ceiling per analysis
 
 // Format a centipawn/mate eval into a human phrase from White's perspective.
 export function describeEval({ scoreCp, mate }, sideToMove) {
@@ -41,7 +47,7 @@ export function uciToSan(fen, uci) {
 
 export async function analyzeFen({ fen, depth } = {}) {
   const game = new Chess(fen); // validates the FEN (throws if illegal)
-  const info = await analyze(fen, { depth: depth ?? DEFAULT_DEPTH });
+  const info = await analyze(fen, { depth: depth ?? DEFAULT_DEPTH, movetime: DEFAULT_MOVETIME });
   const ev = describeEval(info, game.turn());
   return {
     evaluation: ev.text,
@@ -56,7 +62,7 @@ export async function analyzeFen({ fen, depth } = {}) {
 
 export async function bestMove({ fen, depth } = {}) {
   new Chess(fen); // validate
-  const info = await analyze(fen, { depth: depth ?? DEFAULT_DEPTH });
+  const info = await analyze(fen, { depth: depth ?? DEFAULT_DEPTH, movetime: DEFAULT_MOVETIME });
   return { bestMove: uciToSan(fen, info.bestMoveUci), bestMoveUci: info.bestMoveUci };
 }
 
@@ -66,7 +72,7 @@ export async function explainMove({ fen, move, depth } = {}) {
   const sideToMove = before.turn();
   const moverSign = sideToMove === "w" ? 1 : -1; // White's-perspective cp → mover's perspective
 
-  const beforeInfo = await analyze(fen, { depth: d });
+  const beforeInfo = await analyze(fen, { depth: d, movetime: DEFAULT_MOVETIME });
   const bestSan = uciToSan(fen, beforeInfo.bestMoveUci);
   const beforeEval = describeEval(beforeInfo, sideToMove);
   const beforeMoverCp = (beforeEval.whiteCp ?? 0) * moverSign;
@@ -80,7 +86,7 @@ export async function explainMove({ fen, move, depth } = {}) {
     return { error: `Illegal or unparseable move: ${move}` };
   }
 
-  const afterInfo = await analyze(before.fen(), { depth: d });
+  const afterInfo = await analyze(before.fen(), { depth: d, movetime: DEFAULT_MOVETIME });
   const afterMoverCp = (describeEval(afterInfo, before.turn()).whiteCp ?? 0) * moverSign;
   const lossCp = beforeMoverCp - afterMoverCp;
 

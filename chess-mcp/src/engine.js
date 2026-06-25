@@ -11,6 +11,11 @@ import { spawn } from "node:child_process";
 
 const STOCKFISH = process.env.STOCKFISH_PATH || "stockfish";
 
+// `depth` bounds search quality; `movetime` (ms) bounds wall-clock. Passing BOTH issues
+// `go depth D movetime M`, and Stockfish stops at whichever it hits first — so a simple position
+// finishes early on depth while a tactical one is capped by movetime. This keeps per-call latency
+// predictable on a shared (slow) dyno, where an uncapped `go depth 14` could run for seconds. The
+// callers (tools.js) default movetime so every analysis is time-bounded.
 export function analyze(fen, { depth = 14, movetime = null } = {}) {
   return new Promise((resolve, reject) => {
     const proc = spawn(STOCKFISH, [], { stdio: ["pipe", "pipe", "ignore"] });
@@ -65,6 +70,7 @@ export function analyze(fen, { depth = 14, movetime = null } = {}) {
     send("isready");
     send("ucinewgame");
     send(`position fen ${fen}`);
-    send(movetime ? `go movetime ${movetime}` : `go depth ${depth}`);
+    // depth + movetime together → Stockfish halts at whichever limit it reaches first.
+    send(movetime ? `go depth ${depth} movetime ${movetime}` : `go depth ${depth}`);
   });
 }
