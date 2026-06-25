@@ -15,9 +15,10 @@
 class IdentityToken
   ALGORITHM = "RS256".freeze
 
-  def initialize(user:, deployment:)
+  def initialize(user:, deployment:, reset_nonce: nil)
     @user = user
     @deployment = deployment
+    @reset_nonce = reset_nonce.presence
   end
 
   def to_jwt(now: Time.current)
@@ -27,11 +28,32 @@ class IdentityToken
   def payload(now = Time.current)
     {
       iss: @deployment.issuer,
-      sub: @user.email,                 # subject → matched to a Salesforce Contact
+      sub: subject,                     # subject → matched to a Salesforce Contact
       aud: @deployment.audience,
       iat: now.to_i,
       exp: (now + @deployment.token_ttl_seconds).to_i,
     }
+  end
+
+  # The verified subject Salesforce keys the conversation on (and maps to a Contact). Normally the
+  # user's email. For a "New chat" reset the browser sends a short nonce, which we splice in as a
+  # `+r<nonce>` sub-address (local+r<nonce>@domain).
+  #
+  # WHY: a verified MIAW conversation is pinned to the JWT subject — SCRT2 RESUMES the same
+  # conversation for the same subject, so clearSession + launchChat alone never start fresh (the
+  # continuity trap; see docs/miaw-prechat-to-agent-guide.md). A never-before-seen subject is the
+  # only thing that forces a brand-new conversation. The routing flow's Verified_Email formula
+  # strips the `+r<nonce>` tag back to the real email so Get_Contact still matches the right Contact.
+  def subject
+    return @user.email unless @reset_nonce
+
+    local, sep, domain = @user.email.rpartition("@")
+    return @user.email if sep.empty? || domain.blank? # malformed → don't risk an unmatched subject
+
+    nonce = @reset_nonce.gsub(/[^a-zA-Z0-9]/, "") # keep it tag-safe; flow splits on '+'..'@'
+    return @user.email if nonce.blank?
+
+    "#{local}+r#{nonce}@#{domain}"
   end
 
   def headers

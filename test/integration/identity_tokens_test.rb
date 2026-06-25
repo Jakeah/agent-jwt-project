@@ -51,4 +51,12 @@ class IdentityTokensTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal AgentDeployment.default.name, JSON.parse(response.body)["deployment"]
   end
+
+  test "reset param mints a unique +r<nonce> subject for a fresh verified conversation" do
+    sign_in @user
+    get identity_token_path(reset: "xyz789")
+    assert_response :success
+    payload, = JWT.decode(JSON.parse(response.body)["identityToken"], IdentityToken.public_key, true, { algorithm: "RS256" })
+    assert_equal "verify+rxyz789@example.com", payload["sub"]
+  end
 end

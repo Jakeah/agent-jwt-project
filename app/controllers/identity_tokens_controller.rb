@@ -9,7 +9,14 @@ class IdentityTokensController < ApplicationController
 
   def show
     deployment = AgentDeployment.resolve(params[:deployment])
-    token = IdentityToken.new(user: current_user, deployment: deployment).to_jwt
+    # Optional reset nonce: when the user hits "New chat", the browser sends a fresh value so we
+    # mint a unique subject (local+r<nonce>@domain) and Salesforce starts a NEW verified
+    # conversation instead of resuming the pinned one (the continuity trap). Absent on normal mints.
+    token = IdentityToken.new(
+      user: current_user,
+      deployment: deployment,
+      reset_nonce: params[:reset],
+    ).to_jwt
 
     prevent_token_caching!
 

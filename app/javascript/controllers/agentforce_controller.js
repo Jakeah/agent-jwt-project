@@ -37,10 +37,15 @@ const CONTEXT_DEBOUNCE_MS = 400; // collapse a flurry of moves into one settled 
 // means the token is being REJECTED (e.g. no matching Contact for the signed-in email) — stop.
 const REMINT_WINDOW_MS = 30000;
 const MAX_REMINTS_PER_WINDOW = 5;
-// TEMP diagnostics for the v2 "New chat" reset: the conversation keeps resuming instead of starting
-// fresh. Logs the exact order of clearSession → ready re-fire → launchChat, plus the widget's own
-// conversation/session lifecycle events, so one click reveals where the reset breaks. Remove once fixed.
-const RESET_DEBUG = true;
+// localStorage key prefix for the sticky "reset nonce" (namespaced by signed-in email below). When
+// set, every identity-token mint asks the server for a unique subject (local+r<nonce>@domain) so the
+// verified conversation is keyed on the tagged subject — this is what makes "New chat" actually start
+// fresh AND stay on the fresh thread across reloads/re-mints (see resetConversation + setIdentityToken).
+const RESET_NONCE_KEY = "agentforce:resetNonce";
+// Diagnostic toggle for the "New chat" reset path: logs the clearSession → ready re-fire → launchChat
+// ordering and the widget's own lifecycle events. Off by default now that the reset is fixed (the cure
+// was a unique JWT subject, not the event ordering); flip on if the reset ever misbehaves again.
+const RESET_DEBUG = false;
 const rlog = (...a) => RESET_DEBUG && console.log("[agentforce:reset]", ...a);
 
 export default class extends Controller {
@@ -245,12 +250,19 @@ export default class extends Controller {
   }
 
   // --- Reset the coach: end the current (verified) conversation and start a fresh one IN PAGE ---
-  // The documented sequence (no sign-out, no new user): clearSession ends the verified session +
-  // clears all messaging data → the widget re-fires onEmbeddedMessagingReady → handleReady re-verifies
-  // (setIdentityToken) + re-seeds prechat → launchChat({shouldStartNewConversation:true}) opens a brand
-  // new conversation. This is the proper fix for the continuity trap: a fresh conversation re-consumes
-  // prechat AND binds to the current agent version, instead of resuming the stale pinned conversation.
-  // Wired to a "New conversation" button on the game page (MIAW mode).
+  // THE KEY (paid for once, see docs/miaw-prechat-to-agent-guide.md): a verified MIAW conversation
+  // is keyed on the JWT subject. clearSession + launchChat alone always RESUME the same conversation
+  // for the same subject — that's the continuity trap. So the real reset is to mint the next identity
+  // token with a UNIQUE subject (local+r<nonce>@domain): a never-before-seen subject forces SCRT2 to
+  // create a brand-new conversation. (The routing flow strips the +r<nonce> tag back to the real email
+  // so it still binds the right Contact.) The nonce is sticky in localStorage so every subsequent mint
+  // — including the token-expiry re-mint — stays on this fresh thread instead of forking again.
+  //
+  // Sequence: rotate the nonce → clearSession ends the old verified session + re-fires
+  // onEmbeddedMessagingReady → handleReady re-verifies with the NEW-subject token + re-seeds prechat →
+  // onEmbeddedMessagingButtonCreated → launchChat({shouldStartNewConversation:true}) opens the new
+  // conversation, which now re-consumes prechat and binds to the current agent version.
+  // Wired to the "New chat" button on the game page (MIAW mode).
   async resetConversation(event) {
     event?.preventDefault();
     const api = window.embeddedservice_bootstrap?.userVerificationAPI;
@@ -258,7 +270,8 @@ export default class extends Controller {
       console.warn("[agentforce] reset unavailable — widget not ready");
       return;
     }
-    rlog("resetConversation: calling clearSession({shouldEndSession:true})");
+    this.rotateResetNonce(); // the actual fix: next mint gets a fresh, unique verified subject
+    rlog("resetConversation: rotated nonce; calling clearSession({shouldEndSession:true})");
     this.relaunchAfterReady = true; // handleReady (re-fired by clearSession) will launch the new convo
     try {
       const p = api.clearSession({ shouldEndSession: true });
@@ -274,9 +287,44 @@ export default class extends Controller {
     }
   }
 
+  // --- Reset-nonce store (namespaced per signed-in email) ---
+  // Persisted so the fresh-subject choice survives reloads and expiry re-mints; namespaced by email so
+  // a different user signing in on this browser never inherits another user's reset subject. Sticky by
+  // design: once you start a fresh thread it stays fresh until the NEXT "New chat" (or sign-out).
+  resetNonceKey() {
+    const email = document.querySelector('meta[name="chess-player-email"]')?.content || "anon";
+    return `${RESET_NONCE_KEY}:${email}`;
+  }
+
+  resetNonce() {
+    try {
+      return window.localStorage.getItem(this.resetNonceKey()) || "";
+    } catch {
+      return this.memoryNonce || ""; // localStorage blocked → fall back to in-memory (per page load)
+    }
+  }
+
+  // Generate a short, tag-safe nonce (server also strips non-alphanumerics). Avoids Math.random for
+  // uniqueness alone — combines time + a counter so rapid double-clicks still differ.
+  rotateResetNonce() {
+    const nonce = Date.now().toString(36) + ((this.resetCounter = (this.resetCounter || 0) + 1)).toString(36);
+    try {
+      window.localStorage.setItem(this.resetNonceKey(), nonce);
+    } catch {
+      this.memoryNonce = nonce;
+    }
+    return nonce;
+  }
+
   async setIdentityToken() {
     try {
-      const res = await fetch(`/identity_token?deployment=${encodeURIComponent(this.deploymentValue)}`, {
+      // Carry the sticky reset nonce (if any) so the minted subject stays consistent across the
+      // initial verify AND every expiry re-mint — otherwise a re-mint with no nonce (or a different
+      // one) would key a DIFFERENT conversation and silently fork the thread mid-chat.
+      let url = `/identity_token?deployment=${encodeURIComponent(this.deploymentValue)}`;
+      const nonce = this.resetNonce();
+      if (nonce) url += `&reset=${encodeURIComponent(nonce)}`;
+      const res = await fetch(url, {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
       });
@@ -397,6 +445,11 @@ export default class extends Controller {
     } finally {
       this.sessionCleared = true; // guard against re-entry when we resubmit
       window.__eswInitialized = false; // a new login should re-init a fresh widget
+      try {
+        window.localStorage.removeItem(this.resetNonceKey()); // sign-out = clean slate, drop the reset subject
+      } catch {
+        this.memoryNonce = "";
+      }
       form?.requestSubmit ? form.requestSubmit() : form?.submit();
     }
   }

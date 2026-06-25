@@ -36,4 +36,34 @@ class IdentityTokenTest < ActiveSupport::TestCase
       JWT.decode(tampered, IdentityToken.public_key, true, { algorithm: "RS256" })
     end
   end
+
+  # --- "New chat" reset: a unique subject forces a fresh verified conversation ---
+
+  test "reset nonce splices a +r<nonce> sub-address that canonicalizes back to the email" do
+    sub = IdentityToken.new(user: @user, deployment: @deployment, reset_nonce: "abc123").payload[:sub]
+    assert_equal "verify+rabc123@example.com", sub
+    # Mirror the routing flow's Verified_Email formula: strip the +tag back to local@domain.
+    assert_equal @user.email, canonicalize(sub)
+  end
+
+  test "reset nonce is sanitized to tag-safe alphanumerics (flow splits on '+'..'@')" do
+    sub = IdentityToken.new(user: @user, deployment: @deployment, reset_nonce: "a.b-c!@#x").payload[:sub]
+    assert_equal "verify+rabcx@example.com", sub
+    assert_equal @user.email, canonicalize(sub)
+  end
+
+  test "blank or nil reset nonce falls back to the plain email (never an unmatched subject)" do
+    [nil, "", "   ", "!!!"].each do |nonce|
+      sub = IdentityToken.new(user: @user, deployment: @deployment, reset_nonce: nonce).payload[:sub]
+      assert_equal @user.email, sub, "nonce #{nonce.inspect} should fall back to the plain email"
+    end
+  end
+
+  private
+
+  # The Salesforce routing flow's Verified_Email formula, in Ruby — strip a +tag sub-address.
+  def canonicalize(raw)
+    return raw unless raw.include?("+") && raw.include?("@")
+    raw[0...raw.index("+")] + raw[raw.index("@")..]
+  end
 end
