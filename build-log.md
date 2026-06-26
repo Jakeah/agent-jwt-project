@@ -1710,3 +1710,29 @@ Published+activated → **v12**; verified the COMPILED ACTIVE graph carries BOTH
 AND the subscription gate (applied the v11 lesson — decode the graph, don't trust deploy alone). Live
 end-to-end: deployed `/coach/game_state` returned `lastMove="e6"` for `pgn="1. e4 e6"`. 25 Rails + 6
 Apex tests green. This was the last parked item — the project's backlog is now clear.
+
+---
+
+## 2026-06-26 — Self-serve signup: invite passcode + auto-provision a subscribed Contact
+
+Added one piece of functionality: account creation now (a) requires an invite passcode and (b)
+auto-creates a SUBSCRIBED Salesforce Contact so a new user can use the coach immediately.
+
+- **Passcode gate.** Custom `Users::RegistrationsController < Devise::RegistrationsController`
+  rejects `create` unless `signup_code` matches `SIGNUP_CODE` (env; default "astro-chess"),
+  constant-time compare. Route override `devise_for :users, controllers: {registrations: ...}`;
+  added an "Invite code" field to the registration view (read from params, not mass-assigned, so it
+  never touches the User model). Wrong/blank/old-default code → 422 + clear error, email preserved.
+- **Contact provisioning.** `SalesforceQuery` gained write verbs (POST create / PATCH update — the
+  ECA token already has write `api` scope; verified by a create+delete probe). `SalesforceContactSync`
+  upserts a Contact by email (query → PATCH if found, else POST), sets `Is_Subscribed__c=true`, and
+  busts the Subscription cache so coaching works right away. Idempotent (re-signup / existing Contact
+  won't dupe). Run async via `EnsureContactJob` (Solid Queue) from `User#after_create_commit`, so a
+  Salesforce hiccup never blocks/fails signup; retries on transient API errors.
+- **Verified:** 33 Rails tests green (+8 new). Live end-to-end against the org: signup-sync created a
+  real subscribed Contact, second run returned the same Id (no dup), `Subscription.active?` → true;
+  probe Contact deleted after.
+
+NOTE: `SIGNUP_CODE` needs setting on Heroku (`heroku config:set SIGNUP_CODE=astro-chess`) — but the
+code defaults to "astro-chess", so the gate works even if the env var is unset. Heroku auth had
+lapsed at deploy time (needs `heroku login`).
