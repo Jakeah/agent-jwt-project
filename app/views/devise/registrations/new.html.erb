@@ -22,6 +22,15 @@
         <% end %>
 
         <div>
+          <%= f.label :signup_code, "Invite code", class: "block text-sm font-medium text-ink-800 mb-1.5" %>
+          <%= f.text_field :signup_code, autocomplete: "off", placeholder: "Enter your invite code",
+                value: params.dig(resource_name, :signup_code),
+                class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400
+                        focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition" %>
+          <p class="text-xs text-slate-400 mt-1">Sign-up is invite-only for this demo.</p>
+        </div>
+
+        <div>
           <%= f.label :email, class: "block text-sm font-medium text-ink-800 mb-1.5" %>
           <%= f.email_field :email, autofocus: true, autocomplete: "email", placeholder: "you@example.com",
                 class: "w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-ink-900 placeholder:text-slate-400

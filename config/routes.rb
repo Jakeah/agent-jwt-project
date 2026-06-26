@@ -1,5 +1,6 @@
 Rails.application.routes.draw do
-  devise_for :users
+  # Custom registrations controller adds the invite-passcode gate on sign-up (SIGNUP_CODE).
+  devise_for :users, controllers: { registrations: "users/registrations" }
 
   # Mints the RS256 User Verification JWT for the logged-in user. The Agentforce Stimulus
   # controller fetches this on `onEmbeddedMessagingReady` and on token expiry.
