@@ -1736,3 +1736,33 @@ auto-creates a SUBSCRIBED Salesforce Contact so a new user can use the coach imm
 NOTE: `SIGNUP_CODE` needs setting on Heroku (`heroku config:set SIGNUP_CODE=astro-chess`) — but the
 code defaults to "astro-chess", so the gate works even if the env var is unset. Heroku auth had
 lapsed at deploy time (needs `heroku login`).
+
+---
+
+## 2026-06-26 — MIAW widget load optimization (>10s initial load)
+
+Investigated the >10s first-load of the embedded MIAW widget. Measured (curl vs the live deployment):
+bootstrap.min.js is a 307→init.min.js, 44KB gzip, Cloudflare cache HIT, ~700ms — NOT the bottleneck.
+The ~9s is INHERENT, platform-side ESW init after boot.init() (deployment-config fetch → lazy UI
+bundle → SCRT2 handshake → User Verification handshake), serialized, each cold DNS+TLS. We can't
+shrink that — only start it sooner, warm its connections, and move it off the first-paint path.
+
+Shipped the cheap/safe app-side set + boot-on-idle (user-chosen; NOT the bigger head-injection):
+- **Resource hints** (`application.html.erb` + `application_helper#miaw_preconnect_origins`):
+  preconnect+dns-prefetch (crossorigin) to the 3 MIAW hosts (Experience site, SCRT2, My Domain) and
+  rel=preload the bootstrap script — signed-in only. Browser warms DNS+TLS and fetches the script
+  during HTML parse. Hoisted the deployment lookup above <head> so head + body share one lookup.
+- **Parallel identity token** (`agentforce_controller.js`): split setIdentityToken → fetchIdentityToken
+  (network) + apply. Kick the fetch off at boot, parallel to ESW init, stash the promise on window;
+  handleReady awaits it (no longer serializes an app→server round-trip onto the verification tail).
+  One-shot: reset (nonce rotates) + expiry re-fire fetch FRESH (a stale pre-fetched token = wrong sub).
+- **Boot on idle**: defer loadBootstrap via requestIdleCallback({timeout:1500}) + setTimeout fallback
+  (Safari), scheduled once per window (window.__eswBootScheduled). The page paints + is interactive
+  immediately; the coach still auto-appears a beat later (no click needed). Double-init guards,
+  isWidgetReady re-seeding, and headless-mode skip all unchanged.
+
+Honest expectation: the PAGE feels dramatically faster (first paint no longer blocked); the coach
+itself still takes most of its ~9s of Salesforce-side init — started sooner with warm connections,
+~0.5–1s of app-controlled dead time trimmed, the rest masked by a usable page. 33 Rails tests green
+(+ assertions that the hints render signed-in / are absent logged-out). Needs a real DevTools
+waterfall to quantify the exact saving (curl can't show the post-init ESW sub-steps).
