@@ -61,6 +61,22 @@
         <viewAllRecords>false</viewAllRecords>
         <modifyAllRecords>false</modifyAllRecords>
     </objectPermissions>
+    <!-- Contact READ + View All so the agent's ChessCoachCheckSubscription can find the player's
+         Contact (and read Is_Subscribed__c). The Einstein Agent User profile has NO Contact access at
+         all, and these Contacts are owned by the integration user (not the agent), so under a Private
+         OWD object-Read alone wouldn't surface them — View All is required. Without this the
+         subscription SOQL returns zero rows and the gate fails closed (upsells EVERY user). This is
+         the first agent action that actually reads Contact: get_player_name keyed on the null
+         ContactId so it never ran, and get_live_game keys on the prechat email (no Contact read). -->
+    <objectPermissions>
+        <object>Contact</object>
+        <allowRead>true</allowRead>
+        <allowCreate>false</allowCreate>
+        <allowEdit>false</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>true</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
     <!-- FLS read on the MessagingSession game-context fields so the agent can read them as
          @MessagingSession.Chess_*__c (populated by the Omni-Flow from the hidden prechat fields). -->
     <fieldPermissions>

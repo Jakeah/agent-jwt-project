@@ -1793,3 +1793,32 @@ LESSON (reinforced): per-turn deterministic state belongs in `reasoning`, NEVER 
 before_reasoning is entry-only. Verified: data/Apex/version all correct pre-fix; the trace tool can't
 reproduce (headless session carries no prechat email) so the behavioral confirmation is a real
 browser test as the verified user.
+
+---
+
+## 2026-06-26 (cont.) — REAL root cause of the MIAW upsell: agent user can't READ Contact
+
+The before_reasoning→reasoning move (v13) was a valid fix for a latent freshness bug, but it was NOT
+why subscribed users were upsold — the upsell persisted on v13 (confirmed: failing sessions at
+17:51/17:52 ran AFTER v13 activated at 17:48). Kept probing instead of guessing further:
+
+- Apex run as ME (admin) → isSubscribed=true. Session has the email. v13 active + gate wired. Yet upsell.
+- The tell: ChessCoachCheckSubscription is the FIRST agent action that actually READS Contact.
+  get_player_name keyed on @MessagingEndUser.ContactId (arrives null → never ran); get_live_game keys
+  on the prechat EMAIL (no Contact read). So a Contact-visibility gap was invisible until now.
+- Checked ObjectPermissions: the **Einstein Agent User profile has NO Contact access at all**, and the
+  Chess_Coach_Actions perm set granted FLS on Is_Subscribed__c but **no Contact OBJECT read**. The
+  agent runs the Apex `with sharing` as `chesscoach.agent@chess-agent.demo`; that user couldn't see
+  ANY Contact → SOQL returned 0 rows → resolveContact null → fail-closed upsell for EVERY MIAW user.
+  (Never caught because the only MIAW gate "test" was Jordan getting upsold — which is the fail-closed
+  path, identical whether the gate works or the agent simply can't see the Contact.)
+
+FIX: add Contact **Read + ViewAll** to the Chess_Coach_Actions perm set (ViewAll because these
+Contacts are owned by the integration user, not the agent — under a Private OWD object-Read alone
+wouldn't surface them). PROVEN with a System.runAs(agentUser) test: the agent user now SEES the
+Contact and the gate returns true (would have failed pre-fix). Throwaway test removed after.
+
+LESSON: an Apex agent action runs as the agent Run-As user with THAT user's object + record
+visibility — FLS on a field is necessary but NOT sufficient; the agent user also needs object-level
+Read (and ViewAll for records it doesn't own). Test agent-invoked SOQL via System.runAs(agentUser),
+not as admin — admin sees everything and hides exactly this class of bug.
