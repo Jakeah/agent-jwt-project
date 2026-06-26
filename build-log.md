@@ -1766,3 +1766,30 @@ itself still takes most of its ~9s of Salesforce-side init — started sooner wi
 ~0.5–1s of app-controlled dead time trimmed, the rest masked by a usable page. 33 Rails tests green
 (+ assertions that the hints render signed-in / are absent logged-out). Needs a real DevTools
 waterfall to quantify the exact saving (curl can't show the post-init ESW sub-steps).
+
+---
+
+## 2026-06-26 — BUG: MIAW gate upsold a SUBSCRIBED user. before_reasoning staleness (again).
+
+New user johnschaum539@gmail.com (signup auto-created a subscribed Contact) got the "premium feature"
+upsell from the MIAW coach. Ruled out everything in turn:
+- Contact exists, Is_Subscribed__c=TRUE (003g800000LHHy1AAH). ✓ signup flow worked.
+- MessagingSession.Chess_Player_Email__c = the email, conversation AUTH, EndUserContactId linked. ✓
+- ChessCoachCheckSubscription run directly via Apex for that email → isSubscribed=TRUE. ✓
+- Active agent v12 compiled graph contained check_subscription + IsSubscribed + the upsell. ✓
+
+So data + Apex + wiring were all correct — yet the live agent upsold. ROOT CAUSE: the
+check_subscription call lived in **before_reasoning**, which runs on subagent ENTRY only (the greeting
+turn). When the user greeted and THEN asked a question, before_reasoning didn't re-run on the question
+turn, so IsSubscribed stayed at its fail-closed False default → upsell. This is the EXACT trap that
+forced get_live_game into reasoning months ago (the comment was right there) — we reintroduced it on
+the gate. Bonus bug: get_live_game was gated on IsSubscribed==True, so the stale-False also starved
+the live-board pull for subscribed users.
+
+FIX: moved check_subscription out of before_reasoning into the START of the reasoning instructions
+(before the get_live_game gate that reads IsSubscribed), so it runs every turn and is fresh when the
+player actually asks. Published + activated → v13 (compiled-active-graph verified to carry the gate).
+LESSON (reinforced): per-turn deterministic state belongs in `reasoning`, NEVER before_reasoning —
+before_reasoning is entry-only. Verified: data/Apex/version all correct pre-fix; the trace tool can't
+reproduce (headless session carries no prechat email) so the behavioral confirmation is a real
+browser test as the verified user.
