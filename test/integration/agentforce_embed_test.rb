@@ -24,6 +24,13 @@ class AgentforceEmbedTest < ActionDispatch::IntegrationTest
     assert_select "body[data-agentforce-deployment-value=?]", @deployment.name
     # Sign-out clears the verified session (action is in the controller's scope).
     assert_select "form[data-action='submit->agentforce#endSession']"
+
+    # Load-perf resource hints: warm DNS+TLS to the MIAW hosts + preload the bootstrap script so the
+    # widget's heavy init starts with connections open. Origin-only (scheme://host), crossorigin.
+    site_origin = @deployment.site_url[%r{\Ahttps?://[^/]+}]
+    assert_select "head link[rel='preconnect'][href=?][crossorigin]", site_origin
+    assert_select "head link[rel='preload'][as='script'][href=?]",
+                  "#{@deployment.site_url}/assets/js/bootstrap.min.js"
   end
 
   test "anonymous visitor gets no widget and no leaked config" do
@@ -31,5 +38,7 @@ class AgentforceEmbedTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "body[data-controller='agentforce']", false
     assert_select "[data-agentforce-org-id-value]", false
+    # No MIAW resource hints leak to logged-out visitors either.
+    assert_select "head link[rel='preload'][as='script']", false
   end
 end

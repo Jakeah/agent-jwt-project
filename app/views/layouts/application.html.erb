@@ -1,3 +1,6 @@
+<%# Resolve the MIAW deployment once, up top, so both the <head> resource hints and the <body>
+    agentforce controller values can reuse it (one registry lookup). %>
+<% agent_deployment = current_agent_deployment if user_signed_in? %>
 <!DOCTYPE html>
 <html>
   <head>
@@ -20,6 +23,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <%# MIAW widget load optimization: warm DNS+TLS to the chat hosts (Experience site, SCRT2
+        messaging, org My Domain) and let the browser fetch the bootstrap during HTML parse, so the
+        widget's heavy init starts with connections already open instead of all-cold. crossorigin is
+        required or the actual credentialed fetches open a second socket and waste the hint. The bulk
+        of widget load is platform-side; this trims the app-controllable front of it. %>
+    <% if user_signed_in? && agent_deployment&.miaw? %>
+      <% miaw_preconnect_origins(agent_deployment).each do |origin| %>
+        <link rel="preconnect" href="<%= origin %>" crossorigin>
+        <link rel="dns-prefetch" href="<%= origin %>">
+      <% end %>
+      <link rel="preload" as="script" crossorigin href="<%= "#{agent_deployment.site_url}/assets/js/bootstrap.min.js" %>">
+    <% end %>
+
     <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
     <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
 
@@ -37,7 +53,7 @@
       fields, and (because the sign-out button lives inside this scope) clears the verified
       session on sign-out. Config comes from the deployment registry — SOMA/MOMA stays a config
       change. Gating on user_signed_in? means /identity_token always has a Devise session. %>
-  <% if user_signed_in? %><% deployment = current_agent_deployment %><% end %>
+  <% deployment = agent_deployment %><%# resolved once at the top of the template (reused by the head hints) %>
   <%# Auth pages (logged-out) get the aurora backdrop + no chrome; signed-in pages get the app shell. %>
   <body class="font-sans text-ink-900 min-h-screen flex flex-col <%= user_signed_in? ? "bg-slate-50" : "" %>"
         <%= "data-auth" unless user_signed_in? %>
