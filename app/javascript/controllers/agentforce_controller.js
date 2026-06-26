@@ -96,8 +96,16 @@ export default class extends Controller {
 
     // Only stand up MIAW when the user has the Apex coach selected. In headless mode the MCP
     // coach owns the page and we leave the widget entirely out of the DOM.
+    //
+    // LOAD PERF: defer the boot until the browser is idle (the page has painted + settled) instead
+    // of racing it against first paint. The widget's init is heavy (~seconds of platform-side config
+    // fetch + UI bundle + messaging/verification handshake), so kicking it off synchronously here
+    // makes the whole page feel frozen. requestIdleCallback runs it once the main work is done; the
+    // {timeout} cap + setTimeout fallback (Safari has no rIC) guarantee it still boots promptly so
+    // the coach auto-appears a beat later, not on a click. Scheduled once per window (the deferred
+    // call re-checks coachMode + the __esw guards, and loadBootstrap is itself idempotent).
     if (this.coachMode() === "miaw") {
-      this.loadBootstrap();
+      this.scheduleBootstrap();
     }
 
     // CRITICAL (Turbo + persisted widget): the MIAW bootstrap loads ONCE and lives on `window`
@@ -140,6 +148,21 @@ export default class extends Controller {
     }
   }
 
+  // Defer the bootstrap to browser idle so it doesn't compete with first paint. Guarded on
+  // `window.__eswBootScheduled` so a Turbo nav (which re-runs connect) doesn't queue a second boot.
+  // requestIdleCallback with a 1.5s timeout cap; setTimeout fallback for Safari (no rIC). Both land
+  // in loadBootstrap, which is idempotent (the __esw* guards make a double-call a no-op).
+  scheduleBootstrap() {
+    if (window.__eswBootScheduled) return;
+    window.__eswBootScheduled = true;
+    const boot = () => this.loadBootstrap();
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(boot, { timeout: 1500 });
+    } else {
+      setTimeout(boot, 1200);
+    }
+  }
+
   // --- 1. Inject the MIAW bootstrap script — EXACTLY ONCE per window ---
   // Turbo makes "load once" subtle: on each navigation Turbo swaps <body>, discarding the
   // <script id="esw-bootstrap"> we appended — but `window` (and `window.embeddedservice_bootstrap`
@@ -158,6 +181,13 @@ export default class extends Controller {
       return;
     }
     window.__eswBootstrapInjected = true;
+
+    // LOAD PERF: mint the identity token NOW, in parallel with ESW's heavy init, instead of waiting
+    // until onEmbeddedMessagingReady to even start the request — that serializes an app→server
+    // round-trip onto the tail of the verification handshake. Stash the in-flight promise on window
+    // (survives a Turbo nav); handleReady awaits it. Only for the FIRST boot: a reset rotates the
+    // nonce and expiry re-fires, so those paths must fetch fresh (setIdentityToken handles that).
+    window.__eswIdentityTokenPromise = this.fetchIdentityToken();
 
     // Stash the deployment config on window so init still works if this controller's element was
     // swapped out by a Turbo nav before the async script finished loading (the onload below may
@@ -316,23 +346,30 @@ export default class extends Controller {
     return nonce;
   }
 
+  // Mint a fresh identity token from Rails. Network-only — no widget interaction — so it can run in
+  // parallel with ESW init (kicked off in loadBootstrap). Carries the sticky reset nonce so the
+  // minted subject stays consistent across the initial verify AND every expiry re-mint — otherwise a
+  // re-mint with no nonce (or a different one) would key a DIFFERENT conversation and fork the thread.
+  async fetchIdentityToken() {
+    let url = `/identity_token?deployment=${encodeURIComponent(this.deploymentValue)}`;
+    const nonce = this.resetNonce();
+    if (nonce) url += `&reset=${encodeURIComponent(nonce)}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    if (!res.ok) throw new Error(`/identity_token returned ${res.status}`);
+    return res.json(); // { identityTokenType, identityToken }
+  }
+
   async setIdentityToken() {
     try {
-      // Carry the sticky reset nonce (if any) so the minted subject stays consistent across the
-      // initial verify AND every expiry re-mint — otherwise a re-mint with no nonce (or a different
-      // one) would key a DIFFERENT conversation and silently fork the thread mid-chat.
-      let url = `/identity_token?deployment=${encodeURIComponent(this.deploymentValue)}`;
-      const nonce = this.resetNonce();
-      if (nonce) url += `&reset=${encodeURIComponent(nonce)}`;
-      const res = await fetch(url, {
-        headers: { Accept: "application/json" },
-        credentials: "same-origin",
-      });
-      if (!res.ok) {
-        console.error("[agentforce] /identity_token returned", res.status);
-        return;
-      }
-      const { identityTokenType, identityToken } = await res.json();
+      // First ready: consume the token pre-fetched at boot (likely already resolved → no wait).
+      // After that — and on the reset path (nonce rotated) and expiry re-fire — fetch FRESH, because
+      // a stale pre-fetched token would carry the wrong (old) subject. One-shot: clear it after use.
+      let pending = window.__eswIdentityTokenPromise;
+      window.__eswIdentityTokenPromise = null;
+      const { identityTokenType, identityToken } = await (pending || this.fetchIdentityToken());
       window.embeddedservice_bootstrap.userVerificationAPI.setIdentityToken({
         identityTokenType,
         identityToken,
